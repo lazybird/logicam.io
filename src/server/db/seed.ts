@@ -230,14 +230,18 @@ export async function ensureSeedData(): Promise<void> {
   }
 
   // 6. Insertion des 146 ensembles depuis le fichier JSON exporté
-  const jsonFleetPath = path.join(__dirname, 'seed-data', 'initial-fleet.json');
+  const candidatePaths = [
+    path.join(__dirname, 'seed-data', 'initial-fleet.json'),
+    path.resolve(process.cwd(), 'src/server/db/seed-data/initial-fleet.json'),
+  ];
+  const jsonFleetPath = candidatePaths.find((p) => fs.existsSync(p));
   let fleetRows: ParsedTruckRow[] = [];
 
-  if (fs.existsSync(jsonFleetPath)) {
+  if (jsonFleetPath) {
     const raw = fs.readFileSync(jsonFleetPath, 'utf-8');
     fleetRows = JSON.parse(raw);
   } else {
-    throw new Error(`Fichier initial-fleet.json introuvable à : ${jsonFleetPath}`);
+    throw new Error(`Fichier initial-fleet.json introuvable dans : ${candidatePaths.join(', ')}`);
   }
 
   console.log(`🚛 Insertion de ${fleetRows.length} ensembles tracteurs / remorques / attelages...`);
