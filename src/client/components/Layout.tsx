@@ -51,42 +51,39 @@ export const Layout: React.FC<LayoutProps> = ({
     <div className="min-h-screen bg-[#0b1326] text-on-surface flex flex-col font-sans">
       {/* TopNavBar */}
       <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 md:px-6 h-16 bg-surface border-b border-[#334155]">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <button
             type="button"
-            className="lg:hidden text-on-surface-variant hover:text-primary p-1"
+            className="lg:hidden text-on-surface-variant hover:text-primary p-1 shrink-0"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
 
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => onNavigate('fleet')}>
+          <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={() => onNavigate('fleet')}>
             <span className="w-3 h-3 rounded-sm bg-[#ff8c00]"></span>
             <span className="font-mono text-xl font-bold tracking-tight text-[#ffb77d]">LogiCam.io</span>
           </div>
 
           {/* Badge de Rôle */}
           {isSuperAdmin ? (
-            <span className="hidden sm:inline-flex px-2 py-0.5 bg-[#6366F1]/20 text-[#6366F1] border border-[#6366F1] font-mono text-[11px] rounded uppercase tracking-wider font-semibold">
+            <span className="hidden sm:inline-flex px-2 py-0.5 bg-[#6366F1]/20 text-[#6366F1] border border-[#6366F1] font-mono text-[11px] rounded uppercase tracking-wider font-semibold shrink-0">
               SUPER ADMIN
             </span>
           ) : isOrgAdmin ? (
-            <span className="hidden sm:inline-flex px-2 py-0.5 bg-[#ff8c00]/20 text-[#ffb77d] border border-[#ff8c00]/40 font-mono text-[11px] rounded uppercase tracking-wider font-semibold">
+            <span className="hidden sm:inline-flex px-2 py-0.5 bg-[#ff8c00]/20 text-[#ffb77d] border border-[#ff8c00]/40 font-mono text-[11px] rounded uppercase tracking-wider font-semibold shrink-0">
               ADMIN ORG
             </span>
           ) : (
-            <span className="hidden sm:inline-flex px-2 py-0.5 bg-[#4edea3]/20 text-[#4edea3] border border-[#4edea3]/40 font-mono text-[11px] rounded uppercase tracking-wider font-semibold">
+            <span className="hidden sm:inline-flex px-2 py-0.5 bg-[#4edea3]/20 text-[#4edea3] border border-[#4edea3]/40 font-mono text-[11px] rounded uppercase tracking-wider font-semibold shrink-0">
               {user?.team?.name || 'AGENT TERRAIN'}
             </span>
           )}
-        </div>
 
-        {/* Contrôles droits */}
-        <div className="flex items-center gap-3 md:gap-4">
-          {/* Sélecteur de Transporteur pour le Super Admin */}
+          {/* Sélecteur de Transporteur pour le Super Admin — déplacé à côté du logo */}
           {isSuperAdmin && organizations.length > 0 && (
-            <div className="relative flex items-center">
-              <span className="hidden md:inline text-xs font-mono text-on-surface-variant mr-2">
+            <div className="relative flex items-center ml-1 sm:ml-2 border-l border-[#334155] pl-2 sm:pl-3">
+              <span className="hidden lg:inline text-[10px] font-mono text-on-surface-variant mr-1.5 shrink-0">
                 Société :
               </span>
               <div className="relative">
@@ -94,7 +91,7 @@ export const Layout: React.FC<LayoutProps> = ({
                   value={currentOrg?.id || ''}
                   onChange={handleOrgChange}
                   disabled={switching}
-                  className="bg-surface-container border border-[#334155] rounded text-on-surface text-xs font-mono py-1.5 pl-3 pr-8 focus:outline-none focus:border-[#ff8c00] transition-colors appearance-none cursor-pointer"
+                  className="bg-surface-container border border-[#334155] rounded text-on-surface text-xs font-mono py-1.5 pl-2 pr-7 max-w-[140px] md:max-w-[200px] focus:outline-none focus:border-[#ff8c00] transition-colors appearance-none cursor-pointer truncate"
                 >
                   {organizations.map((org) => (
                     <option key={org.id} value={org.id} className="bg-surface-container text-on-surface">
@@ -102,31 +99,34 @@ export const Layout: React.FC<LayoutProps> = ({
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant" />
+                <ChevronDown className="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant" />
               </div>
             </div>
           )}
 
           {/* Transporteur pour utilisateur normal */}
           {!isSuperAdmin && currentOrg && (
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded bg-surface-container border border-[#334155]">
-              <span className="font-mono text-xs text-primary font-medium">{currentOrg.name}</span>
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded bg-surface-container border border-[#334155] shrink-0">
+              <span className="font-mono text-xs text-primary font-medium truncate max-w-[120px]">{currentOrg.name}</span>
             </div>
           )}
+        </div>
 
+        {/* Contrôles droits */}
+        <div className="flex items-center gap-2 md:gap-3 shrink-0">
           {/* Indicateur En Ligne */}
-          <div className="hidden sm:flex items-center gap-2 border border-[#334155] rounded-full px-3 py-1 bg-surface-container-low">
+          <div className="hidden sm:flex items-center gap-1.5 border border-[#334155] rounded-full px-2.5 py-1 bg-surface-container-low">
             <span className="w-2 h-2 rounded-full bg-[#4edea3] animate-pulse"></span>
-            <span className="font-mono text-xs text-[#4edea3]">En ligne</span>
+            <span className="font-mono text-[10px] text-[#4edea3]">En ligne</span>
           </div>
 
           {/* Profil / Nom de l'utilisateur */}
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-surface-container-highest border border-[#334155] flex items-center justify-center font-mono text-xs font-bold text-primary">
+            <div className="w-8 h-8 rounded-full bg-surface-container-highest border border-[#334155] flex items-center justify-center font-mono text-xs font-bold text-primary shrink-0">
               {user?.firstName?.[0] || 'U'}
             </div>
             <div className="hidden md:flex flex-col text-left">
-              <span className="text-xs font-medium text-on-surface truncate max-w-[120px]">
+              <span className="text-xs font-medium text-on-surface truncate max-w-[100px]">
                 {user?.firstName} {user?.lastName}
               </span>
               <span className="text-[10px] text-on-surface-variant font-mono">
@@ -139,7 +139,7 @@ export const Layout: React.FC<LayoutProps> = ({
           <button
             type="button"
             onClick={logout}
-            className="p-1.5 rounded hover:bg-surface-variant text-on-surface-variant hover:text-red-400 transition-colors"
+            className="p-1.5 rounded hover:bg-surface-variant text-on-surface-variant hover:text-red-400 transition-colors shrink-0"
             title="Se déconnecter"
           >
             <LogOut className="w-5 h-5" />
@@ -309,6 +309,21 @@ export const Layout: React.FC<LayoutProps> = ({
                 <span>Administration</span>
               </button>
             )}
+
+            {/* Séparateur */}
+            <div className="mt-auto pt-4 border-t border-[#334155]">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  logout();
+                }}
+                className="w-full text-left font-mono text-xs p-2.5 rounded flex items-center gap-2 text-on-surface-variant hover:text-red-400 hover:bg-surface-variant transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Se déconnecter</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
