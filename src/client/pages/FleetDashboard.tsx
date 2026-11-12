@@ -17,6 +17,7 @@ import {
 import { api } from '../lib/api';
 import { useAuth, useTeamPolicy } from '../context/AuthContext';
 import { CouplingModal } from '../components/CouplingModal';
+import { UncoupleModal } from '../components/UncoupleModal';
 import type {
   CouplingRowDTO,
   FleetKpiDTO,
@@ -54,6 +55,9 @@ export const FleetDashboard: React.FC = () => {
   const [isCouplingModalOpen, setIsCouplingModalOpen] = useState(false);
   const [preselectedTractorId, setPreselectedTractorId] = useState<string | undefined>();
   const [preselectedTrailerId, setPreselectedTrailerId] = useState<string | undefined>();
+
+  // Modale de désattelage
+  const [uncoupleTarget, setUncoupleTarget] = useState<{ id: string; label: string } | null>(null);
 
   // Modale d'ajout rapide de véhicule
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
@@ -129,13 +133,10 @@ export const FleetDashboard: React.FC = () => {
 
   // Désatteler un ensemble
   const handleUncouple = async (couplingId: string) => {
-    if (!confirm('Voulez-vous vraiment désatteler cet ensemble ?')) return;
-    try {
-      await api.post(`/api/fleet/couplings/${couplingId}/uncouple`);
-      loadFleet();
-    } catch (err: any) {
-      alert(err?.message || 'Erreur lors du désattelage');
-    }
+    const row = filteredCouplings.find((c) => c.id === couplingId);
+    if (!row) return;
+    const label = `${row.tractorPlate} + ${row.trailerPlate}`;
+    setUncoupleTarget({ id: couplingId, label });
   };
 
   // Changement rapide de statut d'un tracteur
@@ -664,6 +665,17 @@ export const FleetDashboard: React.FC = () => {
           onSuccess={loadFleet}
           initialTractorId={preselectedTractorId}
           initialTrailerId={preselectedTrailerId}
+        />
+      )}
+
+      {/* Modale de Désattelage */}
+      {uncoupleTarget && (
+        <UncoupleModal
+          isOpen={!!uncoupleTarget}
+          onClose={() => setUncoupleTarget(null)}
+          couplingId={uncoupleTarget.id}
+          couplingLabel={uncoupleTarget.label}
+          onSuccess={loadFleet}
         />
       )}
 
