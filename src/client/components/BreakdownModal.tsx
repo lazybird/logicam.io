@@ -252,7 +252,8 @@ export const BreakdownModal: React.FC<BreakdownModalProps> = ({
                   label: cat.name,
                   badge: severityUpper,
                   badgeColor,
-                  subLabel: `Code: ${cat.code}`,
+                  subLabel: cat.description || undefined,
+                  searchKeywords: cat.code,
                 };
               })}
               value={selectedCategoryId}

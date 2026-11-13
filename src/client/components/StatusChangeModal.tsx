@@ -377,7 +377,8 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
                     label: cat.name,
                     badge: severityUpper,
                     badgeColor,
-                    subLabel: cat.description || `Code: ${cat.code}`,
+                    subLabel: cat.description || undefined,
+                    searchKeywords: cat.code,
                   };
                 })}
               />
@@ -439,7 +440,8 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
                 options={maintenanceSubjectOptions.map((s) => ({
                   id: s.id,
                   label: s.name,
-                  subLabel: s.description || `Code: ${s.code}`,
+                  subLabel: s.description || undefined,
+                  searchKeywords: s.code,
                   badge: (s.severity || 'medium').toUpperCase(),
                   badgeColor: s.severity === 'critical' ? 'red' : s.severity === 'high' ? 'amber' : 'blue',
                 }))}

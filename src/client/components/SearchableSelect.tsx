@@ -8,6 +8,7 @@ export interface SearchableSelectOption {
   badge?: string;
   badgeColor?: 'emerald' | 'amber' | 'blue' | 'gray' | 'red';
   subLabel?: string;
+  searchKeywords?: string;
   disabled?: boolean;
 }
 
@@ -90,7 +91,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     const l = opt.label.toLowerCase();
     const sub = (opt.subLabel || '').toLowerCase();
     const b = (opt.badge || '').toLowerCase();
-    return l.includes(q) || sub.includes(q) || b.includes(q);
+    const k = (opt.searchKeywords || '').toLowerCase();
+    return l.includes(q) || sub.includes(q) || b.includes(q) || k.includes(q);
   });
 
   const getBadgeClass = (color?: SearchableSelectOption['badgeColor']) => {
