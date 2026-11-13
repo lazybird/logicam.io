@@ -47,6 +47,28 @@ interface AdminOverviewResponse {
   garages: GarageDTO[];
 }
 
+const SEVERITY_CONFIG: Record<
+  string,
+  { label: string; badgeClass: string }
+> = {
+  low: {
+    label: 'Faible',
+    badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  },
+  medium: {
+    label: 'Moyenne',
+    badgeClass: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+  },
+  high: {
+    label: 'Élevée',
+    badgeClass: 'bg-orange-500/15 text-[#ff8c00] border-[#ff8c00]/30',
+  },
+  critical: {
+    label: 'Critique',
+    badgeClass: 'bg-red-500/15 text-red-400 border-red-500/30',
+  },
+};
+
 export const OrgAdminPage: React.FC = () => {
   const { currentOrg } = useAuth();
   const { can } = useTeamPolicy();
@@ -84,11 +106,26 @@ export const OrgAdminPage: React.FC = () => {
   // Gestion de la touche Échap pour fermer les modales
   useEscapeKey(isAddMemberOpen, () => setIsAddMemberOpen(false));
   useEscapeKey(isAddTeamOpen, () => setIsAddTeamOpen(false));
+  useEscapeKey(Boolean(deleteConfirmation), () => setDeleteConfirmation(null));
+  useEscapeKey(Boolean(resetPinMember), () => setResetPinMember(null));
 
   // Ajout Catégorie
   const [newCatName, setNewCatName] = useState('');
   const [newCatCode, setNewCatCode] = useState('');
   const [newCatSeverity, setNewCatSeverity] = useState('medium');
+
+  // Modale de confirmation de suppression
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    type: 'category' | 'garage';
+    id: string;
+    name: string;
+  } | null>(null);
+  const [deletingItem, setDeletingItem] = useState(false);
+
+  // Modale de réinitialisation PIN
+  const [resetPinMember, setResetPinMember] = useState<MemberItem | null>(null);
+  const [newMemberPin, setNewMemberPin] = useState('1234');
+  const [resettingPin, setResettingPin] = useState(false);
 
   // Ajout Garage
   const [newGarName, setNewGarName] = useState('');
@@ -196,15 +233,27 @@ export const OrgAdminPage: React.FC = () => {
   };
 
   // Réinitialisation code PIN membre
-  const handleResetPin = async (m: MemberItem) => {
-    const pin = prompt(`Nouveau code PIN à 4 chiffres pour ${m.firstName} ${m.lastName} :`, '1234');
-    if (!pin || pin.length !== 4) return;
+  const handleOpenResetPin = (m: MemberItem) => {
+    setResetPinMember(m);
+    setNewMemberPin('1234');
+  };
 
+  const handleConfirmResetPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPinMember) return;
+    if (!/^\d{4}$/.test(newMemberPin)) {
+      alert('Le code PIN doit comporter exactement 4 chiffres.');
+      return;
+    }
+
+    setResettingPin(true);
     try {
-      await api.patch(`/api/admin/members/${m.id}`, { pin });
-      alert(`Code PIN réinitialisé avec succès pour ${m.firstName} ${m.lastName}.`);
+      await api.patch(`/api/admin/members/${resetPinMember.id}`, { pin: newMemberPin });
+      setResetPinMember(null);
     } catch (err: any) {
       alert(err?.message || 'Erreur lors de la réinitialisation du PIN');
+    } finally {
+      setResettingPin(false);
     }
   };
 
@@ -250,14 +299,12 @@ export const OrgAdminPage: React.FC = () => {
     }
   };
 
-  const handleDeleteCategory = async (id: string) => {
-    if (!confirm('Supprimer cette catégorie de panne ?')) return;
-    try {
-      await api.delete(`/api/admin/categories/${id}`);
-      loadData();
-    } catch (err: any) {
-      alert(err?.message || 'Erreur');
-    }
+  const handleDeleteCategory = (cat: BreakdownCategoryDTO) => {
+    setDeleteConfirmation({
+      type: 'category',
+      id: cat.id,
+      name: cat.name,
+    });
   };
 
   // Garages
@@ -281,13 +328,29 @@ export const OrgAdminPage: React.FC = () => {
     }
   };
 
-  const handleDeleteGarage = async (id: string) => {
-    if (!confirm('Supprimer ce garage ?')) return;
+  const handleDeleteGarage = (gar: GarageDTO) => {
+    setDeleteConfirmation({
+      type: 'garage',
+      id: gar.id,
+      name: gar.name,
+    });
+  };
+
+  const handleExecuteDelete = async () => {
+    if (!deleteConfirmation) return;
+    setDeletingItem(true);
     try {
-      await api.delete(`/api/admin/garages/${id}`);
+      if (deleteConfirmation.type === 'category') {
+        await api.delete(`/api/admin/categories/${deleteConfirmation.id}`);
+      } else {
+        await api.delete(`/api/admin/garages/${deleteConfirmation.id}`);
+      }
+      setDeleteConfirmation(null);
       loadData();
     } catch (err: any) {
-      alert(err?.message || 'Erreur');
+      alert(err?.message || 'Erreur lors de la suppression');
+    } finally {
+      setDeletingItem(false);
     }
   };
 
@@ -479,12 +542,12 @@ export const OrgAdminPage: React.FC = () => {
                         {can('members:manage') && (
                           <button
                             type="button"
-                            onClick={() => handleResetPin(m)}
+                            onClick={() => handleOpenResetPin(m)}
                             className="px-2.5 py-1 rounded border border-[#334155] hover:border-primary text-[10px] text-on-surface-variant hover:text-primary transition-colors inline-flex items-center gap-1"
                             title="Réinitialiser le code PIN"
                           >
                             <Lock className="w-3 h-3" />
-                            <span>Reset PIN</span>
+                            <span>Réinitialiser PIN</span>
                           </button>
                         )}
                       </td>
@@ -706,29 +769,37 @@ export const OrgAdminPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#334155]/40">
-                {(data?.breakdownCategories || []).map((cat) => (
-                  <tr key={cat.id} className="hover:bg-surface-variant/30">
-                    <td className="py-2.5 px-3 font-semibold text-on-surface">{cat.name}</td>
-                    <td className="py-2.5 px-3 text-primary">{cat.code}</td>
-                    <td className="py-2.5 px-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-surface-container border border-[#334155]">
-                        {cat.severity}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-right">
-                      {can('settings:manage') && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCategory(cat.id)}
-                          className="p-1 text-on-surface-variant hover:text-red-400"
-                          title="Supprimer"
+                {(data?.breakdownCategories || []).map((cat) => {
+                  const severityInfo = SEVERITY_CONFIG[cat.severity] || {
+                    label: cat.severity,
+                    badgeClass: 'bg-surface-container border-[#334155] text-on-surface-variant',
+                  };
+                  return (
+                    <tr key={cat.id} className="hover:bg-surface-variant/30">
+                      <td className="py-2.5 px-3 font-semibold text-on-surface">{cat.name}</td>
+                      <td className="py-2.5 px-3 text-primary">{cat.code}</td>
+                      <td className="py-2.5 px-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] border font-medium ${severityInfo.badgeClass}`}
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                          {severityInfo.label}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        {can('settings:manage') && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCategory(cat)}
+                            className="p-1 text-on-surface-variant hover:text-red-400"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -816,7 +887,7 @@ export const OrgAdminPage: React.FC = () => {
                       {can('settings:manage') && (
                         <button
                           type="button"
-                          onClick={() => handleDeleteGarage(gar.id)}
+                          onClick={() => handleDeleteGarage(gar)}
                           className="p-1 text-on-surface-variant hover:text-red-400"
                           title="Supprimer"
                         >
@@ -1020,6 +1091,134 @@ export const OrgAdminPage: React.FC = () => {
                   className="px-4 py-1.5 bg-[#ff8c00] hover:bg-[#ff8c00]/90 text-black font-semibold rounded"
                 >
                   Créer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modale de Confirmation de Suppression (Catégorie / Garage) */}
+      {deleteConfirmation && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deletingItem) setDeleteConfirmation(null);
+          }}
+        >
+          <div className="w-full max-w-md bg-surface border border-[#334155] rounded-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="p-4 bg-surface-container border-b border-[#334155] flex justify-between items-center">
+              <h2 className="font-mono text-sm font-bold text-on-surface flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+                <span>
+                  {deleteConfirmation.type === 'category'
+                    ? 'Supprimer la catégorie'
+                    : 'Supprimer le garage'}
+                </span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmation(null)}
+                disabled={deletingItem}
+                className="text-on-surface-variant hover:text-on-surface p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col gap-4 font-mono text-xs">
+              <p className="text-on-surface">
+                Êtes-vous sûr de vouloir supprimer{' '}
+                <strong className="text-primary font-bold">« {deleteConfirmation.name} »</strong> ?
+              </p>
+              <p className="text-on-surface-variant text-[11px]">
+                Cette action est irréversible.
+              </p>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#334155]">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmation(null)}
+                  disabled={deletingItem}
+                  className="px-3 py-1.5 border border-[#334155] rounded hover:bg-surface-variant text-on-surface"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteDelete}
+                  disabled={deletingItem}
+                  className="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded transition-colors"
+                >
+                  {deletingItem ? 'Suppression...' : 'Confirmer la suppression'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modale de Réinitialisation PIN Membre */}
+      {resetPinMember && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !resettingPin) setResetPinMember(null);
+          }}
+        >
+          <div className="w-full max-w-sm bg-surface border border-[#334155] rounded-xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="p-4 bg-surface-container border-b border-[#334155] flex justify-between items-center">
+              <h2 className="font-mono text-sm font-bold text-on-surface flex items-center gap-2">
+                <Lock className="w-4 h-4 text-primary" />
+                <span>Réinitialiser le Code PIN</span>
+              </h2>
+              <button
+                type="button"
+                onClick={() => setResetPinMember(null)}
+                disabled={resettingPin}
+                className="text-on-surface-variant hover:text-on-surface p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmResetPin} className="p-5 flex flex-col gap-3 font-mono text-xs">
+              <p className="text-on-surface">
+                Nouveau code PIN à 4 chiffres pour{' '}
+                <strong className="text-primary">
+                  {resetPinMember.firstName} {resetPinMember.lastName}
+                </strong>{' '}
+                :
+              </p>
+
+              <div>
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={newMemberPin}
+                  onChange={(e) => setNewMemberPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="1234"
+                  required
+                  autoFocus
+                  className="w-full bg-[#020617] border border-[#334155] rounded py-2 px-3 text-center text-lg tracking-widest text-on-surface focus:outline-none focus:border-[#ff8c00]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#334155]">
+                <button
+                  type="button"
+                  onClick={() => setResetPinMember(null)}
+                  disabled={resettingPin}
+                  className="px-3 py-1.5 border border-[#334155] rounded hover:bg-surface-variant text-on-surface"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={resettingPin || newMemberPin.length !== 4}
+                  className="px-4 py-1.5 bg-[#ff8c00] hover:bg-[#ff8c00]/90 disabled:opacity-50 text-black font-semibold rounded"
+                >
+                  {resettingPin ? 'Enregistrement...' : 'Valider'}
                 </button>
               </div>
             </form>

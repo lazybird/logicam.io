@@ -15,6 +15,8 @@ import {
   X,
   Gauge,
   User,
+  ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth, useTeamPolicy } from '../context/AuthContext';
@@ -53,6 +55,19 @@ export const FleetDashboard: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | VehicleStatus>('ALL');
   const [activeTab, setActiveTab] = useState<'couplings' | 'unassigned'>('couplings');
+  const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
+
+  const toggleRowExpanded = (id: string) => {
+    setExpandedRowIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   // Modales
   const [isCouplingModalOpen, setIsCouplingModalOpen] = useState(false);
@@ -135,6 +150,21 @@ export const FleetDashboard: React.FC = () => {
   const freeTrailers = useMemo(() => {
     return data?.trailers.filter((tr) => !tr.isCoupled) || [];
   }, [data?.trailers]);
+
+  // Véhicules libres opérationnels (en service)
+  const operationalFreeTractors = useMemo(() => {
+    return freeTractors.filter((t) => t.status === 'in_service');
+  }, [freeTractors]);
+
+  const operationalFreeTrailers = useMemo(() => {
+    return freeTrailers.filter((tr) => tr.status === 'in_service');
+  }, [freeTrailers]);
+
+  // Nombre d'attelages complets réalisables immédiatement
+  const formableCouplings = Math.min(
+    operationalFreeTractors.length,
+    operationalFreeTrailers.length
+  );
 
   // Désatteler un ensemble
   const handleUncouple = async (couplingId: string) => {
@@ -271,7 +301,7 @@ export const FleetDashboard: React.FC = () => {
               className="px-3 py-2 border border-[#334155] hover:border-primary rounded font-mono text-xs text-on-surface hover:text-primary transition-colors flex items-center gap-2 bg-surface-container"
             >
               <Plus className="w-4 h-4 text-primary" />
-              <span>+ Véhicule</span>
+              <span>Véhicule</span>
             </button>
           )}
 
@@ -356,40 +386,82 @@ export const FleetDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Barre compacte des disponibilités */}
-      <div className="bg-surface-container border border-[#334155] rounded p-3 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
-        <div className="flex items-center gap-4">
-          <span className="text-on-surface-variant">Disponibilités parc :</span>
-          <span className="text-primary">
-            <strong>{data?.kpis.freeTractors ?? 0}</strong> tracteurs libres
+      {/* Barre de pilotage de la réserve et sélection de vue */}
+      <div className="bg-surface-container border border-[#334155] rounded p-2.5 sm:p-3 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
+        {/* Indicateur de capacité opérationnelle immédiate */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span className="text-on-surface-variant text-[11px] uppercase tracking-wider font-semibold">
+            Réserve opérationnelle :
           </span>
-          <span className="text-[#4edea3]">
-            <strong>{data?.kpis.freeTrailers ?? 0}</strong> remorques libres
-          </span>
+
+          {formableCouplings > 0 ? (
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-[#4edea3]/10 border border-[#4edea3]/30 text-[#4edea3]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
+              <span className="font-semibold">
+                {formableCouplings} attelage{formableCouplings > 1 ? 's' : ''} composable{formableCouplings > 1 ? 's' : ''} immédiatement
+              </span>
+              <span className="text-on-surface-variant text-[11px]">
+                ({operationalFreeTractors.length} tracteur{operationalFreeTractors.length > 1 ? 's' : ''} & {operationalFreeTrailers.length} remorque{operationalFreeTrailers.length > 1 ? 's' : ''} prêts)
+              </span>
+            </div>
+          ) : operationalFreeTractors.length > 0 || operationalFreeTrailers.length > 0 ? (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+              <span>
+                {operationalFreeTractors.length > 0
+                  ? `${operationalFreeTractors.length} tracteur${operationalFreeTractors.length > 1 ? 's' : ''} en attente de remorque`
+                  : `${operationalFreeTrailers.length} remorque${operationalFreeTrailers.length > 1 ? 's' : ''} en attente de tracteur`}
+              </span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-container-high border border-[#334155] text-on-surface-variant">
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#4edea3]" />
+              <span>100% de la flotte mobilisée (aucun matériel en attente)</span>
+            </div>
+          )}
         </div>
 
-        <div className="flex gap-2">
+        {/* Sélecteur de vue (onglets) avec badges compacts */}
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setActiveTab('couplings')}
-            className={`px-3 py-1 rounded text-xs transition-colors ${
+            className={`px-3 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5 ${
               activeTab === 'couplings'
-                ? 'bg-[#ff8c00] text-black font-semibold'
+                ? 'bg-[#ff8c00] text-black font-semibold shadow-[0_0_10px_rgba(255,140,0,0.2)]'
                 : 'bg-surface border border-[#334155] text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            Attelages ({data?.couplings.length ?? 0})
+            <span>Attelés</span>
+            <span
+              className={`px-1.5 py-0.5 rounded text-[10px] ${
+                activeTab === 'couplings'
+                  ? 'bg-black/20 text-black font-bold'
+                  : 'bg-surface-container-high text-on-surface-variant'
+              }`}
+            >
+              {data?.couplings.length ?? 0}
+            </span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('unassigned')}
-            className={`px-3 py-1 rounded text-xs transition-colors ${
+            className={`px-3 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5 ${
               activeTab === 'unassigned'
-                ? 'bg-[#ff8c00] text-black font-semibold'
+                ? 'bg-[#ff8c00] text-black font-semibold shadow-[0_0_10px_rgba(255,140,0,0.2)]'
                 : 'bg-surface border border-[#334155] text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            Véhicules Disponibles ({freeTractors.length + freeTrailers.length})
+            <span>Non attelés</span>
+            <span
+              className={`px-1.5 py-0.5 rounded text-[10px] ${
+                activeTab === 'unassigned'
+                  ? 'bg-black/20 text-black font-bold'
+                  : 'bg-surface-container-high text-on-surface-variant'
+              }`}
+            >
+              {freeTractors.length + freeTrailers.length}
+            </span>
           </button>
         </div>
       </div>
@@ -435,21 +507,24 @@ export const FleetDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Table haute densité des attelages (Desktop & Tablettes md+) */}
-          <div className="hidden md:block overflow-x-auto flex-1">
+          {/* Tableau Unifié & Responsive avec Accordéon Interactif */}
+          <div className="overflow-x-auto flex-1">
             <table className="w-full text-left border-collapse font-mono text-xs">
               <thead className="sticky top-0 bg-surface-container-highest border-b border-[#334155] z-10">
                 <tr>
+                  {/* Sur mobile, colonne compacte N° Ordre + bouton chevron */}
                   <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">N° ORDRE</th>
                   <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">TRACTEUR</th>
                   <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">REMORQUE</th>
-                  <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">TYPE</th>
+                  {/* Colonnes masquées sur mobile (< md) car détaillées dans l'accordéon */}
+                  <th className="hidden md:table-cell py-2.5 px-3 uppercase text-on-surface-variant font-medium">TYPE</th>
                   <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">STATUT</th>
-                  <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium text-right">
+                  <th className="hidden md:table-cell py-2.5 px-3 uppercase text-on-surface-variant font-medium text-right">
                     KILOMÉTRAGE
                   </th>
                   <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium text-center">
-                    ACTIONS
+                    <span className="hidden md:inline">ACTIONS</span>
+                    <span className="md:hidden">DÉTAIL</span>
                   </th>
                 </tr>
               </thead>
@@ -472,256 +547,238 @@ export const FleetDashboard: React.FC = () => {
                       row.mileageKm != null &&
                       row.nextOilChangeKm - row.mileageKm <= 5000;
 
+                    const isExpanded = expandedRowIds.has(row.id);
+
                     return (
-                      <tr
-                        key={row.id}
-                        className="hover:bg-surface-variant/30 transition-colors bg-surface"
-                      >
-                        {/* N° Ordre */}
-                        <td className="py-2.5 px-3 text-[#ffb77d] font-semibold">{row.orderNumber}</td>
-
-                        {/* Tracteur */}
-                        <td className="py-2.5 px-3">
-                          <div className="font-semibold text-on-surface">{row.tractorPlate}</div>
-                          {row.tractorBrandModel && (
-                            <div className="text-[10px] text-on-surface-variant font-sans">
-                              {row.tractorBrandModel}
+                      <React.Fragment key={row.id}>
+                        <tr
+                          onClick={() => toggleRowExpanded(row.id)}
+                          className={`transition-colors cursor-pointer md:cursor-default ${
+                            isExpanded ? 'bg-surface-container-high/60' : 'hover:bg-surface-variant/30 bg-surface'
+                          }`}
+                        >
+                          {/* N° Ordre */}
+                          <td className="py-2.5 px-3 text-[#ffb77d] font-semibold whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <span className="md:hidden text-on-surface-variant">
+                                {isExpanded ? (
+                                  <ChevronDown className="w-3.5 h-3.5 text-[#ff8c00]" />
+                                ) : (
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                )}
+                              </span>
+                              <span>{row.orderNumber}</span>
                             </div>
-                          )}
-                        </td>
+                          </td>
 
-                        {/* Remorque */}
-                        <td className="py-2.5 px-3">
-                          <div className="font-semibold text-on-surface">{row.trailerPlate}</div>
-                          {row.driverName && (
-                            <div className="text-[10px] text-on-surface-variant font-sans">
-                              Chauffeur : {row.driverName}
-                            </div>
-                          )}
-                        </td>
-
-                        {/* Type Remorque */}
-                        <td className="py-2.5 px-3">
-                          <span className="px-2 py-0.5 rounded bg-surface-container-high border border-[#334155] text-[10px] text-on-surface-variant uppercase">
-                            {row.trailerType}
-                          </span>
-                        </td>
-
-                        {/* Statut */}
-                        <td className="py-2.5 px-3">
-                          {isBreakdown ? (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-950/40 text-[#ffb4ab] border border-red-500/40 text-[10px]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#ffb4ab]"></span> En Panne
-                            </span>
-                          ) : isMaintenance ? (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-950/40 text-amber-300 border border-amber-500/40 text-[10px]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-300"></span> Maintenance
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/40 text-[#4edea3] border border-emerald-500/40 text-[10px]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3]"></span> En Service
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Kilométrage */}
-                        <td className="py-2.5 px-3 text-right">
-                          <div>{(row.mileageKm ?? 0).toLocaleString()} km</div>
-                          {oilDue && (
-                            <span className="text-[10px] text-amber-400 font-sans block">
-                              ⚠️ Vidange requise
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Actions */}
-                        <td className="py-2.5 px-3 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {/* Bascule de statut rapide */}
-                            {can('fleet:manage') && (
-                              <select
-                                value={row.tractorStatus}
-                                onChange={(e) =>
-                                  handleUpdateTractorStatus(
-                                    row.tractorId,
-                                    e.target.value as VehicleStatus
-                                  )
-                                }
-                                aria-label={`Statut de l'attelage ${row.orderNumber}`}
-                                className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-0.5 px-1 focus:outline-none focus:border-[#ff8c00]"
-                              >
-                                <option value="in_service">En Service</option>
-                                <option value="breakdown">En Panne</option>
-                                <option value="maintenance">Maintenance</option>
-                              </select>
+                          {/* Tracteur */}
+                          <td className="py-2.5 px-3">
+                            <div className="font-semibold text-on-surface">{row.tractorPlate}</div>
+                            {row.tractorBrandModel && (
+                              <div className="text-[10px] text-on-surface-variant font-sans truncate max-w-[110px] sm:max-w-none">
+                                {row.tractorBrandModel}
+                              </div>
                             )}
+                          </td>
 
-                            {/* Bouton désatteler */}
-                            {can('couplings:change') && (
+                          {/* Remorque */}
+                          <td className="py-2.5 px-3">
+                            <div className="font-semibold text-on-surface">{row.trailerPlate}</div>
+                            {row.driverName ? (
+                              <div className="text-[10px] text-on-surface-variant font-sans truncate max-w-[110px] sm:max-w-none">
+                                {row.driverName}
+                              </div>
+                            ) : (
+                              <div className="md:hidden text-[9px] text-on-surface-variant/60 uppercase">
+                                {row.trailerType}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Type Remorque (Desktop uniquement) */}
+                          <td className="hidden md:table-cell py-2.5 px-3">
+                            <span className="px-2 py-0.5 rounded bg-surface-container-high border border-[#334155] text-[10px] text-on-surface-variant uppercase">
+                              {row.trailerType}
+                            </span>
+                          </td>
+
+                          {/* Statut */}
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            {isBreakdown ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-950/40 text-[#ffb4ab] border border-red-500/40 text-[10px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#ffb4ab]"></span>
+                                <span>Panne</span>
+                              </span>
+                            ) : isMaintenance ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-950/40 text-amber-300 border border-amber-500/40 text-[10px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-300"></span>
+                                <span>Maint.</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950/40 text-[#4edea3] border border-emerald-500/40 text-[10px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3]"></span>
+                                <span>Service</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Kilométrage (Desktop uniquement) */}
+                          <td className="hidden md:table-cell py-2.5 px-3 text-right whitespace-nowrap">
+                            <div>{(row.mileageKm ?? 0).toLocaleString()} km</div>
+                            {oilDue && (
+                              <span className="text-[10px] text-amber-400 font-sans block">
+                                ⚠️ Vidange requise
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Actions (Desktop: sélecteur + unlink direct ; Mobile: bouton déplier/action) */}
+                          <td
+                            className="py-2.5 px-3 text-center whitespace-nowrap"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {/* Version Desktop md+ */}
+                            <div className="hidden md:flex items-center justify-center gap-1.5">
+                              {can('fleet:manage') && (
+                                <select
+                                  value={row.tractorStatus}
+                                  onChange={(e) =>
+                                    handleUpdateTractorStatus(
+                                      row.tractorId,
+                                      e.target.value as VehicleStatus
+                                    )
+                                  }
+                                  aria-label={`Statut de l'attelage ${row.orderNumber}`}
+                                  className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-0.5 px-1 focus:outline-none focus:border-[#ff8c00]"
+                                >
+                                  <option value="in_service">En Service</option>
+                                  <option value="breakdown">En Panne</option>
+                                  <option value="maintenance">Maintenance</option>
+                                </select>
+                              )}
+
+                              {can('couplings:change') && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUncouple(row.id)}
+                                  className="p-1 rounded hover:bg-surface-variant text-on-surface-variant hover:text-red-400 transition-colors"
+                                  title="Désatteler"
+                                  aria-label={`Désatteler l'attelage ${row.orderNumber} (${row.tractorPlate} et ${row.trailerPlate})`}
+                                >
+                                  <Unlink className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Version Mobile < md : Toggle Accordéon accessible */}
+                            <div className="md:hidden flex items-center justify-center">
                               <button
                                 type="button"
-                                onClick={() => handleUncouple(row.id)}
-                                className="p-1 rounded hover:bg-surface-variant text-on-surface-variant hover:text-red-400 transition-colors"
-                                title="Désatteler"
-                                aria-label={`Désatteler l'attelage ${row.orderNumber} (${row.tractorPlate} et ${row.trailerPlate})`}
+                                onClick={() => toggleRowExpanded(row.id)}
+                                className={`p-1.5 rounded transition-colors flex items-center gap-1 text-[11px] ${
+                                  isExpanded
+                                    ? 'bg-[#ff8c00]/20 text-[#ffb77d]'
+                                    : 'hover:bg-surface-variant text-on-surface-variant'
+                                }`}
+                                aria-label={`${isExpanded ? 'Masquer' : 'Afficher'} les détails et actions de ${row.orderNumber}`}
+                                aria-expanded={isExpanded}
                               >
-                                <Unlink className="w-4 h-4" />
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronDown className="w-4 h-4 text-[#ff8c00]" />
+                                    <span className="font-sans font-medium text-[10px]">Fermer</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronRight className="w-4 h-4" />
+                                    <span className="font-sans font-medium text-[10px]">Actions</span>
+                                  </>
+                                )}
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Accordéon Dépliable sur Mobile (< md) */}
+                        {isExpanded && (
+                          <tr className="md:hidden bg-[#020617]/95 border-y border-[#334155]">
+                            <td colSpan={5} className="p-3">
+                              <div className="flex flex-col gap-3 font-mono text-xs">
+                                {/* Détails complémentaires */}
+                                <div className="grid grid-cols-2 gap-2 bg-surface-container border border-[#334155]/60 rounded p-2.5 text-[11px]">
+                                  <div>
+                                    <span className="text-on-surface-variant block text-[10px]">TYPE REMORQUE</span>
+                                    <span className="font-bold text-on-surface">{row.trailerType}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-on-surface-variant block text-[10px]">CHAUFFEUR</span>
+                                    <span className="font-bold text-on-surface">
+                                      {row.driverName || 'Non assigné'}
+                                    </span>
+                                  </div>
+                                  <div className="col-span-2 pt-1 border-t border-[#334155]/50 flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5 text-on-surface-variant">
+                                      <Gauge className="w-3.5 h-3.5 text-primary" />
+                                      <span>{(row.mileageKm ?? 0).toLocaleString()} km</span>
+                                    </div>
+                                    {oilDue && (
+                                      <span className="text-[10px] text-amber-400 font-sans font-medium bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/30">
+                                        ⚠️ Vidange requise
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Actions Mobile avec libellés complets */}
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                                  {can('fleet:manage') && (
+                                    <div className="flex-1 flex flex-col gap-1">
+                                      <label
+                                        htmlFor={`acc-status-${row.id}`}
+                                        className="text-[10px] uppercase text-on-surface-variant"
+                                      >
+                                        Changer le statut :
+                                      </label>
+                                      <select
+                                        id={`acc-status-${row.id}`}
+                                        value={row.tractorStatus}
+                                        onChange={(e) =>
+                                          handleUpdateTractorStatus(
+                                            row.tractorId,
+                                            e.target.value as VehicleStatus
+                                          )
+                                        }
+                                        className="w-full bg-[#0b1326] border border-[#334155] rounded py-2 px-2.5 font-mono text-xs text-on-surface focus:outline-none focus:border-[#ff8c00]"
+                                      >
+                                        <option value="in_service">En Service</option>
+                                        <option value="breakdown">En Panne</option>
+                                        <option value="maintenance">Maintenance</option>
+                                      </select>
+                                    </div>
+                                  )}
+
+                                  {can('couplings:change') && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUncouple(row.id)}
+                                      className="flex items-center justify-center gap-2 py-2 px-3 rounded border border-red-500/40 text-red-400 hover:bg-red-950/40 hover:text-red-300 font-mono text-xs transition-colors shrink-0 self-end sm:self-auto w-full sm:w-auto"
+                                      aria-label={`Désatteler l'attelage ${row.orderNumber}`}
+                                    >
+                                      <Unlink className="w-4 h-4" />
+                                      <span className="font-medium">Désatteler l'attelage</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })
                 )}
               </tbody>
             </table>
-          </div>
-
-          {/* Vue Cartes Mobiles (Mobile < md) */}
-          <div className="md:hidden flex flex-col divide-y divide-[#334155]/60 bg-[#020617]/50">
-            {filteredCouplings.length === 0 ? (
-              <div className="py-12 px-4 text-center text-on-surface-variant text-xs font-mono">
-                Aucun attelage ne correspond aux critères de recherche.
-              </div>
-            ) : (
-              filteredCouplings.map((row) => {
-                const isBreakdown =
-                  row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown';
-                const isMaintenance =
-                  row.tractorStatus === 'maintenance' || row.trailerStatus === 'maintenance';
-
-                const oilDue =
-                  row.nextOilChangeKm != null &&
-                  row.mileageKm != null &&
-                  row.nextOilChangeKm - row.mileageKm <= 5000;
-
-                return (
-                  <article
-                    key={row.id}
-                    className="p-3.5 flex flex-col gap-3 bg-surface hover:bg-surface-variant/20 transition-colors"
-                    aria-labelledby={`card-order-${row.id}`}
-                  >
-                    {/* En-tête de carte : N° Ordre + Badge Statut + Type */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          id={`card-order-${row.id}`}
-                          className="font-mono text-sm font-bold text-[#ffb77d] tracking-wide"
-                        >
-                          {row.orderNumber}
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-surface-container-high border border-[#334155] text-[10px] font-mono text-on-surface-variant uppercase">
-                          {row.trailerType}
-                        </span>
-                      </div>
-
-                      {/* Badge Statut */}
-                      {isBreakdown ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-red-950/40 text-[#ffb4ab] border border-red-500/40 text-[11px] font-mono font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#ffb4ab]"></span> En Panne
-                        </span>
-                      ) : isMaintenance ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-amber-950/40 text-amber-300 border border-amber-500/40 text-[11px] font-mono font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-300"></span> Maintenance
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-950/40 text-[#4edea3] border border-emerald-500/40 text-[11px] font-mono font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3]"></span> En Service
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Bloc Véhicules : Tracteur & Remorque */}
-                    <div className="grid grid-cols-2 gap-2 bg-[#020617] border border-[#334155]/60 rounded p-2.5">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] uppercase font-mono tracking-wider text-on-surface-variant flex items-center gap-1">
-                          <Truck className="w-3 h-3 text-[#ff8c00]" /> Tracteur
-                        </span>
-                        <span className="font-mono text-xs font-bold text-on-surface mt-0.5">
-                          {row.tractorPlate}
-                        </span>
-                        {row.tractorBrandModel && (
-                          <span className="text-[10px] text-on-surface-variant truncate">
-                            {row.tractorBrandModel}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col border-l border-[#334155]/60 pl-2.5">
-                        <span className="text-[10px] uppercase font-mono tracking-wider text-on-surface-variant flex items-center gap-1">
-                          <Truck className="w-3 h-3 text-[#4edea3]" /> Remorque
-                        </span>
-                        <span className="font-mono text-xs font-bold text-on-surface mt-0.5">
-                          {row.trailerPlate}
-                        </span>
-                        {row.driverName ? (
-                          <span className="text-[10px] text-on-surface-variant truncate flex items-center gap-1">
-                            <User className="w-2.5 h-2.5" /> {row.driverName}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-on-surface-variant/60 italic">Sans chauffeur</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Kilométrage & Alerte Vidange */}
-                    <div className="flex items-center justify-between text-xs font-mono px-1">
-                      <div className="flex items-center gap-1.5 text-on-surface-variant">
-                        <Gauge className="w-3.5 h-3.5 text-primary" />
-                        <span>{(row.mileageKm ?? 0).toLocaleString()} km</span>
-                      </div>
-                      {oilDue && (
-                        <span className="text-[11px] text-amber-400 font-sans flex items-center gap-1 font-medium bg-amber-950/30 px-2 py-0.5 rounded border border-amber-500/30">
-                          ⚠️ Vidange requise
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Barre d'Actions Mobile avec labels explicites */}
-                    <div className="pt-2 border-t border-[#334155]/60 flex items-center gap-2">
-                      {can('fleet:manage') && (
-                        <div className="flex-1">
-                          <label
-                            htmlFor={`status-select-${row.id}`}
-                            className="sr-only"
-                          >
-                            Changer le statut pour {row.orderNumber}
-                          </label>
-                          <select
-                            id={`status-select-${row.id}`}
-                            value={row.tractorStatus}
-                            onChange={(e) =>
-                              handleUpdateTractorStatus(
-                                row.tractorId,
-                                e.target.value as VehicleStatus
-                              )
-                            }
-                            className="w-full bg-[#020617] border border-[#334155] rounded py-2 px-2.5 font-mono text-xs text-on-surface focus:outline-none focus:border-[#ff8c00]"
-                          >
-                            <option value="in_service">En Service</option>
-                            <option value="breakdown">En Panne</option>
-                            <option value="maintenance">Maintenance</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {can('couplings:change') && (
-                        <button
-                          type="button"
-                          onClick={() => handleUncouple(row.id)}
-                          className="flex items-center justify-center gap-2 py-2 px-3 rounded border border-red-500/40 text-red-400 hover:bg-red-950/40 hover:text-red-300 font-mono text-xs transition-colors shrink-0"
-                          aria-label={`Désatteler l'attelage ${row.orderNumber}`}
-                        >
-                          <Unlink className="w-4 h-4" />
-                          <span className="font-medium">Désatteler</span>
-                        </button>
-                      )}
-                    </div>
-                  </article>
-                );
-              })
-            )}
           </div>
         </div>
       )}

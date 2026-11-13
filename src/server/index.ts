@@ -13,14 +13,12 @@ const PORT = Number(process.env.PORT) || 3000;
 
 async function bootstrap() {
   // 1. Initialisation auto du schéma et des données si base configurée
-  if (process.env.DATABASE_URL) {
-    try {
-      console.log('🔄 Initialisation de la base de données...');
-      await ensureSchema();
-      await ensureSeedData();
-    } catch (err) {
-      console.error('⚠️ Avertissement : échec lors de l’initialisation DB :', err);
-    }
+  try {
+    console.log('🔄 Initialisation de la base de données...');
+    await ensureSchema();
+    await ensureSeedData();
+  } catch (err) {
+    console.error('⚠️ Avertissement : échec lors de l’initialisation DB :', err);
   }
 
   // 2. En production, servir les fichiers statiques du build client

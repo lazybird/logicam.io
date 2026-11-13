@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { db, pool } from './index.js';
@@ -16,10 +15,7 @@ import {
   garages,
 } from './schema.js';
 import { hashPin, normalizePhone } from '../auth/pin.js';
-import type { ParsedTruckRow, VehicleStatus } from '../../shared/types.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import type { VehicleStatus, TrailerType } from '../../shared/types.js';
 
 export async function ensureSeedData(): Promise<void> {
   // S'assurer que le schéma de tables existe
@@ -32,33 +28,28 @@ export async function ensureSeedData(): Promise<void> {
     return;
   }
 
-  console.log('🌱 Démarrage de l’initialisation des données (Seed)...');
+  console.log('🌱 Démarrage de l’initialisation des données locales fictives (Mock Seed)...');
 
-  // 2. Création des Organisations
-  const [wal] = await db
+  // 2. Création des Organisations fictives
+  const [sahelTrans] = await db
     .insert(organizations)
     .values({
-      name: 'WEST AFRICA LOGISTICS',
-      slug: 'west-africa-logistics',
+      name: 'SAHEL TRANS EXPRESS (LOCAL)',
+      slug: 'sahel-trans-local',
       subscriptionStatus: 'active',
     })
     .returning();
 
-  const [soyak] = await db
+  const [dakarLogistics] = await db
     .insert(organizations)
     .values({
-      name: 'SOYAK',
-      slug: 'soyak',
+      name: 'DAKAR LOGISTICS MOCK (LOCAL)',
+      slug: 'dakar-logistics-local',
       subscriptionStatus: 'active',
     })
     .returning();
 
-  const orgMap: Record<string, typeof wal> = {
-    'WEST AFRICA LOGISTICS': wal,
-    SOYAK: soyak,
-  };
-
-  // 3. Création des Équipes pour WAL et SOYAK
+  // 3. Configuration des Équipes pour chaque organisation
   const teamConfigs = [
     {
       name: 'Exploitation',
@@ -107,9 +98,9 @@ export async function ensureSeedData(): Promise<void> {
     },
   ];
 
-  const walTeams: Record<string, string> = {};
+  const sahelTeams: Record<string, string> = {};
 
-  for (const org of [wal, soyak]) {
+  for (const org of [sahelTrans, dakarLogistics]) {
     for (const conf of teamConfigs) {
       const [insertedTeam] = await db
         .insert(teams)
@@ -120,8 +111,8 @@ export async function ensureSeedData(): Promise<void> {
         })
         .returning();
 
-      if (org.id === wal.id) {
-        walTeams[conf.name] = insertedTeam.id;
+      if (org.id === sahelTrans.id) {
+        sahelTeams[conf.name] = insertedTeam.id;
       }
 
       // Insertion des capabilities
@@ -143,59 +134,59 @@ export async function ensureSeedData(): Promise<void> {
     }
   }
 
-  // 4. Utilisateurs par défaut (PIN 1234)
+  // 4. Utilisateurs locaux par défaut (Code PIN 1234)
   const defaultPinHash = hashPin('1234');
 
   // Super Admin (sans organisation spécifique)
   await db.insert(users).values({
     organizationId: null,
     phone: normalizePhone('+221770000000'),
-    email: 'admin@logicam.io',
+    email: 'admin.local@logicam.dev',
     pinHash: defaultPinHash,
     firstName: 'Sylvain',
-    lastName: 'SuperAdmin',
+    lastName: 'SuperAdmin (Local)',
     role: 'SUPER_ADMIN',
     status: 'active',
   });
 
-  // Admin WAL
+  // Admin Sahel Trans
   await db.insert(users).values({
-    organizationId: wal.id,
+    organizationId: sahelTrans.id,
     phone: normalizePhone('+221771234567'),
-    email: 'a.diallo@wal.com',
+    email: 'admin@saheltrans.local',
     pinHash: defaultPinHash,
-    firstName: 'Amadou',
-    lastName: 'Diallo',
+    firstName: 'Mamadou',
+    lastName: 'Ba (Admin Sahel)',
     role: 'ORG_ADMIN',
     status: 'active',
   });
 
-  // Agent Terrain WAL
+  // Agent Terrain Sahel Trans
   await db.insert(users).values({
-    organizationId: wal.id,
-    teamId: walTeams['Terrain'],
+    organizationId: sahelTrans.id,
+    teamId: sahelTeams['Terrain'],
     phone: normalizePhone('+221789876543'),
-    email: 'a.fall@wal.com',
+    email: 'terrain@saheltrans.local',
     pinHash: defaultPinHash,
-    firstName: 'Aminata',
-    lastName: 'Fall',
+    firstName: 'Fatou',
+    lastName: 'Sow (Terrain Sahel)',
     role: 'MEMBER',
     status: 'active',
   });
 
-  // Admin SOYAK
+  // Admin Dakar Logistics Mock
   await db.insert(users).values({
-    organizationId: soyak.id,
+    organizationId: dakarLogistics.id,
     phone: normalizePhone('+221772223344'),
-    email: 'm.soyak@soyak.net',
+    email: 'admin@dakarlogistics.local',
     pinHash: defaultPinHash,
-    firstName: 'Moussa',
-    lastName: 'Soyak',
+    firstName: 'Ousmane',
+    lastName: 'Cissé (Admin Dakar Log)',
     role: 'ORG_ADMIN',
     status: 'active',
   });
 
-  // 5. Catégories de pannes & Garages par défaut
+  // 5. Catégories de pannes & Garages fictifs
   const defaultCategories = [
     { name: 'Moteur / Transmission', code: 'ENGINE', severity: 'high' },
     { name: 'Système de Freinage', code: 'BRAKES', severity: 'critical' },
@@ -205,11 +196,11 @@ export async function ensureSeedData(): Promise<void> {
   ];
 
   const defaultGarages = [
-    { name: 'Atelier Central Dakar', location: 'Zone Portuaire, Dakar', contactPhone: '+221338000001' },
-    { name: 'Garage Zone Industrielle', location: 'KM 14 Route de Rufisque', contactPhone: '+221338000002' },
+    { name: 'Atelier Mock Bel-Air', location: 'Zone Industrielle Bel-Air, Dakar', contactPhone: '+221338111111' },
+    { name: 'Garage Test Diamniadio', location: 'Pôle Urbain Diamniadio', contactPhone: '+221338222222' },
   ];
 
-  for (const org of [wal, soyak]) {
+  for (const org of [sahelTrans, dakarLogistics]) {
     for (const cat of defaultCategories) {
       await db.insert(breakdownCategories).values({
         organizationId: org.id,
@@ -229,75 +220,72 @@ export async function ensureSeedData(): Promise<void> {
     }
   }
 
-  // 6. Insertion des 146 ensembles depuis le fichier JSON exporté
-  const candidatePaths = [
-    path.join(__dirname, 'seed-data', 'initial-fleet.json'),
-    path.resolve(process.cwd(), 'src/server/db/seed-data/initial-fleet.json'),
+  // 6. Flotte fictive locale (12 ensembles pour Sahel Trans + 8 ensembles pour Dakar Logistics)
+  const mockVehicles = [
+    // Flotte Sahel Trans Express (12 ensembles)
+    { org: sahelTrans, prefix: 'ST', count: 12, brands: ['MERCEDES ACTROS', 'MAN TGX', 'VOLVO FH16'] },
+    // Flotte Dakar Logistics (8 ensembles)
+    { org: dakarLogistics, prefix: 'DL', count: 8, brands: ['SCANIA R500', 'RENAULT T-HIGH'] },
   ];
-  const jsonFleetPath = candidatePaths.find((p) => fs.existsSync(p));
-  let fleetRows: ParsedTruckRow[] = [];
 
-  if (jsonFleetPath) {
-    const raw = fs.readFileSync(jsonFleetPath, 'utf-8');
-    fleetRows = JSON.parse(raw);
-  } else {
-    throw new Error(`Fichier initial-fleet.json introuvable dans : ${candidatePaths.join(', ')}`);
-  }
+  let orderIndex = 1;
 
-  console.log(`🚛 Insertion de ${fleetRows.length} ensembles tracteurs / remorques / attelages...`);
+  for (const fleetConfig of mockVehicles) {
+    console.log(`🚛 Création de ${fleetConfig.count} ensembles fictifs pour ${fleetConfig.org.name}...`);
 
-  for (let i = 0; i < fleetRows.length; i++) {
-    const row = fleetRows[i];
-    const org = orgMap[row.organizationName] || wal;
-    const num = i + 1;
+    for (let i = 1; i <= fleetConfig.count; i++) {
+      const tractorPlate = `LOCAL-${fleetConfig.prefix}-${String(100 + i)}`;
+      const trailerPlate = `LOCAL-REM-${fleetConfig.prefix}-${String(200 + i)}`;
+      const brand = fleetConfig.brands[(i - 1) % fleetConfig.brands.length];
+      const trailerType: TrailerType = i % 3 === 0 ? 'PLATEAU' : i % 3 === 1 ? 'BENNE' : 'CITERNE';
 
-    // Détermination d'un statut réaliste
-    let vehicleStatus: VehicleStatus = 'in_service';
-    if (num % 18 === 0) {
-      vehicleStatus = 'breakdown';
-    } else if (num % 12 === 0) {
-      vehicleStatus = 'maintenance';
+      // Statuts variés : quelques pannes et maintenances pour avoir des KPIs réalistes
+      let vehicleStatus: VehicleStatus = 'in_service';
+      if (i === 3) vehicleStatus = 'breakdown';
+      else if (i === 7) vehicleStatus = 'maintenance';
+
+      const mileageKm = 45000 + (i * 12500);
+      const nextOilChangeKm = mileageKm + 10000;
+
+      // 1. Tracteur
+      const [insertedTractor] = await db
+        .insert(tractors)
+        .values({
+          organizationId: fleetConfig.org.id,
+          plateNumber: tractorPlate,
+          brandModel: brand,
+          status: vehicleStatus,
+          mileageKm,
+          nextOilChangeKm,
+        })
+        .returning();
+
+      // 2. Remorque
+      const [insertedTrailer] = await db
+        .insert(trailers)
+        .values({
+          organizationId: fleetConfig.org.id,
+          plateNumber: trailerPlate,
+          trailerType,
+          status: vehicleStatus,
+        })
+        .returning();
+
+      // 3. Attelage actif
+      await db.insert(couplings).values({
+        organizationId: fleetConfig.org.id,
+        orderNumber: `#ORD-LOCAL-${String(orderIndex).padStart(4, '0')}`,
+        tractorId: insertedTractor.id,
+        trailerId: insertedTrailer.id,
+        isActive: true,
+        driverName: `Conducteur Test ${fleetConfig.prefix}-${String(i).padStart(2, '0')}`,
+      });
+
+      orderIndex++;
     }
-
-    const mileageKm = 85000 + ((num * 1234) % 250000);
-    const nextOilChangeKm = mileageKm + 15000 - ((num * 321) % 10000);
-
-    // 1. Création du tracteur
-    const [insertedTractor] = await db
-      .insert(tractors)
-      .values({
-        organizationId: org.id,
-        plateNumber: row.tractorPlate,
-        brandModel: num % 2 === 0 ? 'VOLVO FH16' : 'RENAULT T-HIGH',
-        status: vehicleStatus,
-        mileageKm,
-        nextOilChangeKm,
-      })
-      .returning();
-
-    // 2. Création de la remorque
-    const [insertedTrailer] = await db
-      .insert(trailers)
-      .values({
-        organizationId: org.id,
-        plateNumber: row.trailerPlate,
-        trailerType: (row.trailerType as any) || 'BENNE',
-        status: vehicleStatus,
-      })
-      .returning();
-
-    // 3. Création de l'attelage actif
-    await db.insert(couplings).values({
-      organizationId: org.id,
-      orderNumber: row.orderNumber,
-      tractorId: insertedTractor.id,
-      trailerId: insertedTrailer.id,
-      isActive: true,
-      driverName: `Chauffeur #${String(num).padStart(3, '0')}`,
-    });
   }
 
-  console.log('✅ Seed LogiCam terminé avec succès.');
+  console.log('✅ Mock Seed LogiCam local terminé avec succès.');
 }
 
 // Exécution directe en CLI
