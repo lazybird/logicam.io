@@ -22,8 +22,9 @@ import { api } from '../lib/api';
 import { useAuth, useTeamPolicy } from '../context/AuthContext';
 import { CouplingModal } from '../components/CouplingModal';
 import { UncoupleModal } from '../components/UncoupleModal';
-import { BreakdownModal, type BreakdownTargetPayload, type BreakdownTargetScope } from '../components/BreakdownModal';
-import { MaintenanceModal } from '../components/MaintenanceModal';
+import { StatusChangeModal } from '../components/StatusChangeModal';
+import { IncidentHistoryModal } from '../components/IncidentHistoryModal';
+import type { BreakdownTargetPayload, BreakdownTargetScope } from '../components/BreakdownModal';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import type {
   CouplingRowDTO,
@@ -99,13 +100,17 @@ export const FleetDashboard: React.FC = () => {
   // Modale de désattelage
   const [uncoupleTarget, setUncoupleTarget] = useState<{ id: string; label: string } | null>(null);
 
-  // Modale de déclaration de panne
-  const [breakdownTarget, setBreakdownTarget] = useState<BreakdownTargetPayload | null>(null);
-  const [breakdownInitialScope, setBreakdownInitialScope] = useState<BreakdownTargetScope>('tractor');
+  // Modale unique et unifiée de changement de statut
+  const [statusModalTarget, setStatusModalTarget] = useState<BreakdownTargetPayload | null>(null);
+  const [statusModalScope, setStatusModalScope] = useState<BreakdownTargetScope>('both');
+  const [statusModalAction, setStatusModalAction] = useState<VehicleStatus>('in_service');
 
-  // Modale de maintenance
-  const [maintenanceTarget, setMaintenanceTarget] = useState<BreakdownTargetPayload | null>(null);
-  const [maintenanceInitialScope, setMaintenanceInitialScope] = useState<BreakdownTargetScope>('tractor');
+  // Modale d'historique des interventions
+  const [historyModalTarget, setHistoryModalTarget] = useState<{
+    title: string;
+    subtitle?: string;
+    incidents: IncidentDTO[];
+  } | null>(null);
 
   // Modale d'ajout rapide de véhicule
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
@@ -215,103 +220,64 @@ export const FleetDashboard: React.FC = () => {
     setUncoupleTarget({ id: couplingId, label });
   };
 
-  // Changement rapide de statut d'un attelage (ou déclenchement de la modale de panne/maintenance)
-  const handleStatusChangeRequest = async (
+  // Ouverture de la modale unifiée de statut pour un attelage
+  const openCouplingStatusModal = (
     row: (typeof filteredCouplings)[number],
-    newStatus: VehicleStatus,
-    targetScope: BreakdownTargetScope = 'both'
+    targetScope: BreakdownTargetScope = 'both',
+    defaultAction?: VehicleStatus
   ) => {
-    if (newStatus === 'breakdown') {
-      // Ouvre la modale complète avec scope pré-sélectionné (tractor, trailer ou both)
-      setBreakdownInitialScope(targetScope);
-      setBreakdownTarget({
-        kind: 'coupling',
-        id: row.id,
-        orderNumber: row.orderNumber,
-        tractorId: row.tractorId,
-        tractorPlate: row.tractorPlate,
-        tractorStatus: row.tractorStatus,
-        trailerId: row.trailerId,
-        trailerPlate: row.trailerPlate,
-        trailerStatus: row.trailerStatus,
-      });
-      return;
+    // Si defaultAction n'est pas fourni, déduit intelligemment :
+    // Si l'élément est déjà en panne ou maintenance -> propose 'in_service' pour le remettre en service
+    // Sinon propose 'breakdown'
+    let action: VehicleStatus = defaultAction || 'breakdown';
+    if (!defaultAction) {
+      const isImmobilized =
+        targetScope === 'tractor'
+          ? row.tractorStatus !== 'in_service'
+          : targetScope === 'trailer'
+          ? row.trailerStatus !== 'in_service'
+          : row.tractorStatus !== 'in_service' || row.trailerStatus !== 'in_service';
+
+      action = isImmobilized ? 'in_service' : 'breakdown';
     }
 
-    if (newStatus === 'maintenance') {
-      // Ouvre la modale complète avec scope pré-sélectionné (tractor, trailer ou both)
-      setMaintenanceInitialScope(targetScope);
-      setMaintenanceTarget({
-        kind: 'coupling',
-        id: row.id,
-        orderNumber: row.orderNumber,
-        tractorId: row.tractorId,
-        tractorPlate: row.tractorPlate,
-        tractorStatus: row.tractorStatus,
-        trailerId: row.trailerId,
-        trailerPlate: row.trailerPlate,
-        trailerStatus: row.trailerStatus,
-      });
-      return;
-    }
-
-    try {
-      // Remise en service : s'applique selon le composant sélectionné (tracteur seul, remorque seule, ou les deux)
-      const patches: Promise<any>[] = [];
-      if (targetScope === 'tractor' || targetScope === 'both') {
-        patches.push(api.patch(`/api/fleet/tractors/${row.tractorId}`, { status: newStatus }));
-      }
-      if (targetScope === 'trailer' || targetScope === 'both') {
-        patches.push(api.patch(`/api/fleet/trailers/${row.trailerId}`, { status: newStatus }));
-      }
-      await Promise.all(patches);
-      loadFleet();
-    } catch (err: any) {
-      alert(err?.message || 'Erreur lors de la mise à jour du statut');
-    }
+    setStatusModalScope(targetScope);
+    setStatusModalAction(action);
+    setStatusModalTarget({
+      kind: 'coupling',
+      id: row.id,
+      orderNumber: row.orderNumber,
+      tractorId: row.tractorId,
+      tractorPlate: row.tractorPlate,
+      tractorStatus: row.tractorStatus,
+      trailerId: row.trailerId,
+      trailerPlate: row.trailerPlate,
+      trailerStatus: row.trailerStatus,
+    });
   };
 
-  // Changement rapide de statut d'un véhicule non attelé (libre)
-  const handleStandaloneVehicleStatusChange = async (
+  // Ouverture de la modale unifiée de statut pour un véhicule non attelé
+  const openStandaloneStatusModal = (
     vehicleType: 'tractor' | 'trailer',
     vehicle: TractorDTO | TrailerDTO,
-    newStatus: VehicleStatus
+    defaultAction?: VehicleStatus
   ) => {
-    if (newStatus === 'breakdown') {
-      setBreakdownTarget({
-        kind: 'standalone',
-        vehicleType,
-        id: vehicle.id,
-        plateNumber: vehicle.plateNumber,
-        label: vehicleType === 'tractor' ? (vehicle as TractorDTO).brandModel : (vehicle as TrailerDTO).trailerType,
-        status: vehicle.status,
-      });
-      return;
-    }
+    const action: VehicleStatus =
+      defaultAction || (vehicle.status !== 'in_service' ? 'in_service' : 'breakdown');
 
-    if (newStatus === 'maintenance') {
-      setMaintenanceTarget({
-        kind: 'standalone',
-        vehicleType,
-        id: vehicle.id,
-        plateNumber: vehicle.plateNumber,
-        label: vehicleType === 'tractor' ? (vehicle as TractorDTO).brandModel : (vehicle as TrailerDTO).trailerType,
-        status: vehicle.status,
-      });
-      return;
-    }
-
-    try {
-      const endpoint =
+    setStatusModalScope(vehicleType);
+    setStatusModalAction(action);
+    setStatusModalTarget({
+      kind: 'standalone',
+      vehicleType,
+      id: vehicle.id,
+      plateNumber: vehicle.plateNumber,
+      label:
         vehicleType === 'tractor'
-          ? `/api/fleet/tractors/${vehicle.id}`
-          : `/api/fleet/trailers/${vehicle.id}`;
-
-      await api.patch(endpoint, { status: newStatus });
-      loadFleet();
-    } catch (err: any) {
-      alert(err?.message || 'Erreur lors de la mise à jour du statut');
-    }
+          ? (vehicle as TractorDTO).brandModel
+          : (vehicle as TrailerDTO).trailerType,
+      status: vehicle.status,
+    });
   };
 
   // Ajout de véhicule
@@ -652,15 +618,12 @@ export const FleetDashboard: React.FC = () => {
                   <th className="hidden md:table-cell py-2.5 px-3 uppercase text-on-surface-variant font-medium text-right">
                     KILOMÉTRAGE
                   </th>
-                  <th className="hidden md:table-cell py-2.5 px-3 uppercase text-on-surface-variant font-medium text-center">
-                    ACTIONS
-                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#334155]/40 font-mono">
                 {filteredCouplings.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-on-surface-variant">
+                    <td colSpan={6} className="py-8 text-center text-on-surface-variant">
                       Aucun attelage ne correspond aux critères de recherche.
                     </td>
                   </tr>
@@ -777,8 +740,7 @@ export const FleetDashboard: React.FC = () => {
                           <td className="py-2 px-2 sm:px-3 whitespace-nowrap">
                             {isBreakdown ? (
                               <div className="inline-flex flex-col gap-0.5">
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-950/70 text-[#ffb4ab] border border-red-500/50 text-[10px] font-semibold">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-[#ffb4ab] animate-ping"></span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded bg-red-950/70 text-[#ffb4ab] border border-red-500/50 text-[10px] font-semibold">
                                   <span>En Panne</span>
                                 </span>
                                 <span className="text-[9px] text-red-300/80 font-mono">
@@ -791,8 +753,7 @@ export const FleetDashboard: React.FC = () => {
                               </div>
                             ) : isMaintenance ? (
                               <div className="inline-flex flex-col gap-0.5">
-                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-950/70 text-amber-300 border border-amber-500/50 text-[10px] font-semibold">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-300"></span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-950/70 text-amber-300 border border-amber-500/50 text-[10px] font-semibold">
                                   <span>Maintenance</span>
                                 </span>
                                 <span className="text-[9px] text-amber-300/80 font-mono">
@@ -804,8 +765,7 @@ export const FleetDashboard: React.FC = () => {
                                 </span>
                               </div>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/50 text-[#4edea3] border border-emerald-500/40 text-[10px] font-medium">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3]"></span>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-950/50 text-[#4edea3] border border-emerald-500/40 text-[10px] font-medium">
                                 <span>En Service</span>
                               </span>
                             )}
@@ -820,72 +780,27 @@ export const FleetDashboard: React.FC = () => {
                               </span>
                             )}
                           </td>
-
-                          {/* Actions (Desktop md+ uniquement : Changer statut + Désatteler) */}
-                          <td
-                            className="hidden md:table-cell py-2.5 px-3 text-center whitespace-nowrap"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div className="flex items-center justify-center gap-1.5">
-                              {can('fleet:manage') && (
-                                <select
-                                  value={
-                                    row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown'
-                                      ? 'breakdown'
-                                      : row.tractorStatus === 'maintenance' || row.trailerStatus === 'maintenance'
-                                      ? 'maintenance'
-                                      : 'in_service'
-                                  }
-                                  onChange={(e) =>
-                                    handleStatusChangeRequest(
-                                      row,
-                                      e.target.value as VehicleStatus,
-                                      'both'
-                                    )
-                                  }
-                                  aria-label={`Changer statut de l'attelage ${row.orderNumber}`}
-                                  className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-0.5 px-1 focus:outline-none focus:border-[#ff8c00]"
-                                >
-                                  <option value="in_service">En Service</option>
-                                  <option value="breakdown">En Panne</option>
-                                  <option value="maintenance">Maintenance</option>
-                                </select>
-                              )}
-
-                              {can('couplings:change') && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleUncouple(row.id)}
-                                  className="p-1 rounded hover:bg-surface-variant text-on-surface-variant hover:text-red-400 transition-colors"
-                                  title="Désatteler"
-                                  aria-label={`Désatteler l'attelage ${row.orderNumber} (${row.tractorPlate} et ${row.trailerPlate})`}
-                                >
-                                  <Unlink className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
                         </tr>
 
                         {/* Accordéon Dépliable (Desktop & Mobile) — Détails de panne, infos complémentaires et actions */}
                         {isExpanded && (
                           <tr className="bg-[#020617]/95 border-y border-[#334155]">
-                            <td colSpan={7} className="p-3 sm:p-4">
+                            <td colSpan={6} className="p-3 sm:p-4">
                               <div className="flex flex-col gap-3 font-mono text-xs">
-                                {/* Section 1 : Détail des pannes et maintenances (si incident en cours ou véhicule immobilisé) */}
+                                 {/* Section 1 : Détail du Diagnostic & Immobilisation en cours */}
                                 {(isBreakdown || isMaintenance) && (
-                                  <div className="rounded-lg border border-red-500/40 bg-red-950/20 p-3 flex flex-col gap-2">
+                                  <div className="rounded-lg border border-red-500/40 bg-red-950/20 p-3 flex flex-col gap-2.5">
                                     <div className="flex items-center justify-between pb-1.5 border-b border-red-500/30">
                                       <div className="flex items-center gap-2 text-red-300 font-bold text-xs uppercase tracking-wider">
                                         <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-                                        <span>Détail du Diagnostic & Déclaration d'Incident</span>
+                                        <span>Diagnostic & État d'Immobilisation</span>
                                       </div>
-                                      <span className="text-[10px] px-2 py-0.5 rounded bg-red-950/70 border border-red-500/50 text-red-300">
+                                      <span className="text-[10px] px-2 py-0.5 rounded bg-red-950/70 border border-red-500/50 text-red-300 font-semibold">
                                         {isBreakdown ? 'Panne déclarée' : 'Maintenance planifiée'}
                                       </span>
                                     </div>
 
-                                    {/* Statut par élément de l'attelage avec actions directes */}
+                                    {/* Statut par élément de l'attelage avec bouton unique et épuré */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                                       {/* Tracteur */}
                                       <div className={`p-2.5 rounded-lg border flex flex-col gap-2 ${
@@ -911,45 +826,21 @@ export const FleetDashboard: React.FC = () => {
                                               ? 'En Panne'
                                               : row.tractorStatus === 'maintenance'
                                               ? 'Maintenance'
-                                              : 'Opérationnel'}
+                                              : 'En Service'}
                                           </span>
                                         </div>
 
                                         {can('fleet:manage') && (
                                           <div className="flex items-center justify-between pt-1 border-t border-white/10 gap-2">
-                                            <span className="text-[10px] text-on-surface-variant font-medium">Changer état tracteur :</span>
-                                            <div className="flex items-center gap-1">
-                                              {row.tractorStatus !== 'in_service' && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleStatusChangeRequest(row, 'in_service', 'tractor')}
-                                                  className="px-2 py-0.5 rounded bg-emerald-900/60 hover:bg-emerald-800 text-[#4edea3] border border-emerald-500/50 text-[10px] font-semibold transition-colors"
-                                                  title="Remettre en service le tracteur"
-                                                >
-                                                  Remettre en service
-                                                </button>
-                                              )}
-                                              {row.tractorStatus !== 'breakdown' && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleStatusChangeRequest(row, 'breakdown', 'tractor')}
-                                                  className="px-2 py-0.5 rounded bg-red-900/50 hover:bg-red-800 text-red-300 border border-red-500/40 text-[10px] transition-colors"
-                                                  title="Déclarer une panne sur le tracteur"
-                                                >
-                                                  Panne...
-                                                </button>
-                                              )}
-                                              {row.tractorStatus !== 'maintenance' && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleStatusChangeRequest(row, 'maintenance', 'tractor')}
-                                                  className="px-2 py-0.5 rounded bg-amber-900/50 hover:bg-amber-800 text-amber-300 border border-amber-500/40 text-[10px] transition-colors"
-                                                  title="Placer le tracteur en maintenance"
-                                                >
-                                                  Atelier...
-                                                </button>
-                                              )}
-                                            </div>
+                                            <span className="text-[10px] text-on-surface-variant">Action :</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => openCouplingStatusModal(row, 'tractor')}
+                                              className="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-variant border border-[#334155] hover:border-primary text-on-surface text-[10px] font-semibold transition-colors flex items-center gap-1.5"
+                                            >
+                                              <Wrench className="w-3 h-3 text-primary" />
+                                              <span>Changer l'état du tracteur</span>
+                                            </button>
                                           </div>
                                         )}
                                       </div>
@@ -978,51 +869,27 @@ export const FleetDashboard: React.FC = () => {
                                               ? 'En Panne'
                                               : row.trailerStatus === 'maintenance'
                                               ? 'Maintenance'
-                                              : 'Opérationnelle'}
+                                              : 'En Service'}
                                           </span>
                                         </div>
 
                                         {can('fleet:manage') && (
                                           <div className="flex items-center justify-between pt-1 border-t border-white/10 gap-2">
-                                            <span className="text-[10px] text-on-surface-variant font-medium">Changer état remorque :</span>
-                                            <div className="flex items-center gap-1">
-                                              {row.trailerStatus !== 'in_service' && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleStatusChangeRequest(row, 'in_service', 'trailer')}
-                                                  className="px-2 py-0.5 rounded bg-emerald-900/60 hover:bg-emerald-800 text-[#4edea3] border border-emerald-500/50 text-[10px] font-semibold transition-colors"
-                                                  title="Remettre en service la remorque"
-                                                >
-                                                  Remettre en service
-                                                </button>
-                                              )}
-                                              {row.trailerStatus !== 'breakdown' && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleStatusChangeRequest(row, 'breakdown', 'trailer')}
-                                                  className="px-2 py-0.5 rounded bg-red-900/50 hover:bg-red-800 text-red-300 border border-red-500/40 text-[10px] transition-colors"
-                                                  title="Déclarer une panne sur la remorque"
-                                                >
-                                                  Panne...
-                                                </button>
-                                              )}
-                                              {row.trailerStatus !== 'maintenance' && (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleStatusChangeRequest(row, 'maintenance', 'trailer')}
-                                                  className="px-2 py-0.5 rounded bg-amber-900/50 hover:bg-amber-800 text-amber-300 border border-amber-500/40 text-[10px] transition-colors"
-                                                  title="Placer la remorque en maintenance"
-                                                >
-                                                  Atelier...
-                                                </button>
-                                              )}
-                                            </div>
+                                            <span className="text-[10px] text-on-surface-variant">Action :</span>
+                                            <button
+                                              type="button"
+                                              onClick={() => openCouplingStatusModal(row, 'trailer')}
+                                              className="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-variant border border-[#334155] hover:border-primary text-on-surface text-[10px] font-semibold transition-colors flex items-center gap-1.5"
+                                            >
+                                              <Wrench className="w-3 h-3 text-primary" />
+                                              <span>Changer l'état de la remorque</span>
+                                            </button>
                                           </div>
                                         )}
                                       </div>
                                     </div>
 
-                                    {/* Historique ou fiche de l'incident associé */}
+                                    {/* Dernier incident & Lien Historique */}
                                     {(() => {
                                       const relatedIncidents = (data?.incidents || []).filter(
                                         (inc) =>
@@ -1034,64 +901,72 @@ export const FleetDashboard: React.FC = () => {
                                       if (relatedIncidents.length === 0) {
                                         return (
                                           <p className="text-[11px] text-on-surface-variant italic pt-1">
-                                            Aucune note ou catégorie enregistrée pour cette immobilisation. Vous pouvez déclarer une panne via le sélecteur pour renseigner le motif.
+                                            Aucun rapport d'intervention consigné. Cliquez sur "Changer l'état" pour enregistrer un motif ou remettre en service.
                                           </p>
                                         );
                                       }
 
+                                      const latestIncident = relatedIncidents[0];
+
                                       return (
-                                        <div className="flex flex-col gap-1.5 pt-1">
-                                          <span className="text-[10px] text-on-surface-variant uppercase font-medium">
-                                            Derniers signalements d'incidents :
-                                          </span>
-                                          <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto">
-                                            {relatedIncidents.slice(0, 3).map((inc) => (
-                                              <div
-                                                key={inc.id}
-                                                className="p-2 rounded bg-[#020617]/80 border border-[#334155]/70 flex flex-col gap-1 text-[11px]"
-                                              >
-                                                <div className="flex items-center justify-between">
-                                                  <div className="flex items-center gap-1.5">
-                                                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
-                                                      inc.type === 'breakdown'
-                                                        ? 'bg-red-950/80 text-red-300 border border-red-500/40'
-                                                        : 'bg-amber-950/80 text-amber-300 border border-amber-500/40'
-                                                    }`}>
-                                                      {inc.type === 'breakdown' ? 'Panne' : 'Maintenance'}
-                                                    </span>
-                                                    {inc.category && (
-                                                      <span className="font-semibold text-on-surface">
-                                                        {inc.category.name}
-                                                      </span>
-                                                    )}
-                                                    {inc.garage && (
-                                                      <span className="text-on-surface-variant">
-                                                        @ {inc.garage.name}
-                                                      </span>
-                                                    )}
-                                                  </div>
-                                                  <span className="text-[10px] text-on-surface-variant flex items-center gap-1">
-                                                    <Clock className="w-3 h-3" />
-                                                    {new Date(inc.createdAt).toLocaleString('fr-FR', {
-                                                      day: '2-digit',
-                                                      month: '2-digit',
-                                                      hour: '2-digit',
-                                                      minute: '2-digit',
-                                                    })}
+                                        <div className="flex flex-col gap-1.5 pt-1 border-t border-red-500/20">
+                                          <div className="flex items-center justify-between text-[11px]">
+                                            <span className="text-on-surface-variant font-medium uppercase text-[10px]">
+                                              Dernier événement :
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setHistoryModalTarget({
+                                                  title: `Historique des interventions — ${row.orderNumber}`,
+                                                  subtitle: `${row.tractorPlate} + ${row.trailerPlate}`,
+                                                  incidents: relatedIncidents,
+                                                })
+                                              }
+                                              className="text-primary hover:underline font-mono text-[11px] flex items-center gap-1"
+                                            >
+                                              <Clock className="w-3 h-3" />
+                                              <span>Voir l'historique ({relatedIncidents.length})</span>
+                                            </button>
+                                          </div>
+
+                                          <div className="p-2.5 rounded bg-[#020617]/80 border border-[#334155]/70 flex flex-col gap-1 text-[11px]">
+                                            <div className="flex items-center justify-between">
+                                              <div className="flex items-center gap-1.5">
+                                                <span
+                                                  className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
+                                                    latestIncident.type === 'breakdown'
+                                                      ? 'bg-red-950/80 text-red-300 border border-red-500/40'
+                                                      : 'bg-amber-950/80 text-amber-300 border border-amber-500/40'
+                                                  }`}
+                                                >
+                                                  {latestIncident.type === 'breakdown' ? 'Panne' : 'Maintenance'}
+                                                </span>
+                                                {latestIncident.category && (
+                                                  <span className="font-semibold text-on-surface">
+                                                    {latestIncident.category.name}
                                                   </span>
-                                                </div>
-                                                {inc.notes && (
-                                                  <p className="text-on-surface-variant font-sans text-xs bg-surface-container/60 p-1.5 rounded">
-                                                    "{inc.notes}"
-                                                  </p>
                                                 )}
-                                                {inc.reportedByName && (
-                                                  <span className="text-[9px] text-on-surface-variant/70">
-                                                    Signalé par {inc.reportedByName}
+                                                {latestIncident.garage && (
+                                                  <span className="text-on-surface-variant">
+                                                    @ {latestIncident.garage.name}
                                                   </span>
                                                 )}
                                               </div>
-                                            ))}
+                                              <span className="text-[10px] text-on-surface-variant">
+                                                {new Date(latestIncident.createdAt).toLocaleString('fr-FR', {
+                                                  day: '2-digit',
+                                                  month: '2-digit',
+                                                  hour: '2-digit',
+                                                  minute: '2-digit',
+                                                })}
+                                              </span>
+                                            </div>
+                                            {latestIncident.notes && (
+                                              <p className="text-on-surface font-sans text-xs bg-surface-container/60 p-1.5 rounded mt-0.5">
+                                                "{latestIncident.notes}"
+                                              </p>
+                                            )}
                                           </div>
                                         </div>
                                       );
@@ -1130,55 +1005,30 @@ export const FleetDashboard: React.FC = () => {
 
                                 {/* Section 3 : Actions rapides globales sur l'attelage */}
                                 <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-[#334155]/50 items-stretch sm:items-center justify-between">
-                                  {/* Sélecteur de statut pour l'ensemble complet */}
+                                  {/* Bouton unique pour changer le statut */}
                                   {can('fleet:manage') && (
                                     <div className="flex items-center justify-between p-2 rounded-lg bg-[#020617]/70 border border-[#334155]/60 gap-3 flex-1">
                                       <div className="flex flex-col">
                                         <span className="text-[10px] uppercase font-mono tracking-wider text-on-surface-variant font-medium">
-                                          Statut global de l'attelage (ensemble)
+                                          Statut global de l'attelage
                                         </span>
                                         <span className="text-[11px] font-mono text-on-surface">
                                           {isBreakdown
                                             ? `En Panne (${row.tractorStatus === 'breakdown' && row.trailerStatus === 'breakdown' ? 'Ensemble' : row.tractorStatus === 'breakdown' ? 'Tracteur seul' : 'Remorque seule'})`
                                             : isMaintenance
-                                            ? `En Maintenance (${row.tractorStatus === 'maintenance' && row.trailerStatus === 'maintenance' ? 'Ensemble' : row.tractorStatus === 'maintenance' ? 'Tracteur seul' : 'Remorque seule'})`
+                                            ? `Maintenance (${row.tractorStatus === 'maintenance' && row.trailerStatus === 'maintenance' ? 'Ensemble' : row.tractorStatus === 'maintenance' ? 'Tracteur seul' : 'Remorque seule'})`
                                             : 'En Service (Opérationnel)'}
                                         </span>
                                       </div>
-                                      <select
-                                        value={
-                                          row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown'
-                                            ? 'breakdown'
-                                            : row.tractorStatus === 'maintenance' || row.trailerStatus === 'maintenance'
-                                            ? 'maintenance'
-                                            : 'in_service'
-                                        }
-                                        onChange={(e) =>
-                                          handleStatusChangeRequest(
-                                            row,
-                                            e.target.value as VehicleStatus,
-                                            'both'
-                                          )
-                                        }
-                                        aria-label={`Changer statut global de l'attelage ${row.orderNumber}`}
-                                        className={`border rounded-lg text-xs font-mono py-1.5 px-3 focus:outline-none focus:ring-1 cursor-pointer font-medium transition-colors ${
-                                          row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown'
-                                            ? 'bg-red-950/60 border-red-500/60 text-red-300'
-                                            : row.tractorStatus === 'maintenance' || row.trailerStatus === 'maintenance'
-                                            ? 'bg-amber-950/60 border-amber-500/60 text-amber-300'
-                                            : 'bg-emerald-950/60 border-emerald-500/60 text-[#4edea3]'
-                                        }`}
+
+                                      <button
+                                        type="button"
+                                        onClick={() => openCouplingStatusModal(row, 'both')}
+                                        className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-variant border border-[#334155] hover:border-primary text-on-surface text-xs font-semibold transition-colors flex items-center gap-2"
                                       >
-                                        <option value="in_service" className="bg-[#020617] text-[#4edea3]">
-                                          En Service (Ensemble)
-                                        </option>
-                                        <option value="breakdown" className="bg-[#020617] text-red-300">
-                                          En Panne...
-                                        </option>
-                                        <option value="maintenance" className="bg-[#020617] text-amber-300">
-                                          Maintenance...
-                                        </option>
-                                      </select>
+                                        <Wrench className="w-3.5 h-3.5 text-primary" />
+                                        <span>Changer le statut...</span>
+                                      </button>
                                     </div>
                                   )}
 
@@ -1321,24 +1171,16 @@ export const FleetDashboard: React.FC = () => {
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            {/* Sélecteur de statut rapide */}
+                            {/* Bouton de statut rapide */}
                             {can('fleet:manage') && (
-                              <select
-                                value={t.status}
-                                onChange={(e) =>
-                                  handleStandaloneVehicleStatusChange(
-                                    'tractor',
-                                    t,
-                                    e.target.value as VehicleStatus
-                                  )
-                                }
-                                aria-label={`Statut du tracteur ${t.plateNumber}`}
-                                className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-1 px-1.5 focus:outline-none focus:border-[#ff8c00]"
+                              <button
+                                type="button"
+                                onClick={() => openStandaloneStatusModal('tractor', t)}
+                                className="px-2 py-1 rounded bg-surface-container hover:bg-surface-variant border border-[#334155] hover:border-primary text-on-surface text-[10px] font-semibold transition-colors flex items-center gap-1"
                               >
-                                <option value="in_service">En Service</option>
-                                <option value="breakdown">En Panne</option>
-                                <option value="maintenance">Maintenance</option>
-                              </select>
+                                <Wrench className="w-3 h-3 text-primary" />
+                                <span>Statut...</span>
+                              </button>
                             )}
 
                             {/* Bouton atteler */}
@@ -1382,48 +1224,64 @@ export const FleetDashboard: React.FC = () => {
                                   </p>
                                 ) : (
                                   <div className="flex flex-col gap-1.5">
-                                    {relatedIncidents.slice(0, 2).map((inc) => (
-                                      <div
-                                        key={inc.id}
-                                        className="p-2 rounded bg-[#020617]/80 border border-[#334155]/70 flex flex-col gap-1 text-[11px]"
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <span className="text-on-surface-variant text-[10px] uppercase font-medium">
+                                        Dernière intervention :
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setHistoryModalTarget({
+                                            title: `Historique des interventions — Tracteur ${t.plateNumber}`,
+                                            subtitle: t.brandModel || undefined,
+                                            incidents: relatedIncidents,
+                                          })
+                                        }
+                                        className="text-primary hover:underline font-mono text-[11px] flex items-center gap-1"
                                       >
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
-                                              inc.type === 'breakdown'
+                                        <Clock className="w-3 h-3" />
+                                        <span>Voir l'historique ({relatedIncidents.length})</span>
+                                      </button>
+                                    </div>
+                                    <div className="p-2 rounded bg-[#020617]/80 border border-[#334155]/70 flex flex-col gap-1 text-[11px]">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                          <span
+                                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
+                                              relatedIncidents[0].type === 'breakdown'
                                                 ? 'bg-red-950/80 text-red-300 border border-red-500/40'
                                                 : 'bg-amber-950/80 text-amber-300 border border-amber-500/40'
-                                            }`}>
-                                              {inc.type === 'breakdown' ? 'Panne' : 'Maintenance'}
-                                            </span>
-                                            {inc.category && (
-                                              <span className="font-semibold text-on-surface">
-                                                {inc.category.name}
-                                              </span>
-                                            )}
-                                            {inc.garage && (
-                                              <span className="text-on-surface-variant">
-                                                @ {inc.garage.name}
-                                              </span>
-                                            )}
-                                          </div>
-                                          <span className="text-[10px] text-on-surface-variant flex items-center gap-1">
-                                            <Clock className="w-3 h-3" />
-                                            {new Date(inc.createdAt).toLocaleString('fr-FR', {
-                                              day: '2-digit',
-                                              month: '2-digit',
-                                              hour: '2-digit',
-                                              minute: '2-digit',
-                                            })}
+                                            }`}
+                                          >
+                                            {relatedIncidents[0].type === 'breakdown' ? 'Panne' : 'Maintenance'}
                                           </span>
+                                          {relatedIncidents[0].category && (
+                                            <span className="font-semibold text-on-surface">
+                                              {relatedIncidents[0].category.name}
+                                            </span>
+                                          )}
+                                          {relatedIncidents[0].garage && (
+                                            <span className="text-on-surface-variant">
+                                              @ {relatedIncidents[0].garage.name}
+                                            </span>
+                                          )}
                                         </div>
-                                        {inc.notes && (
-                                          <p className="text-on-surface-variant font-sans text-xs bg-surface-container/60 p-1.5 rounded">
-                                            "{inc.notes}"
-                                          </p>
-                                        )}
+                                        <span className="text-[10px] text-on-surface-variant flex items-center gap-1">
+                                          <Clock className="w-3 h-3" />
+                                          {new Date(relatedIncidents[0].createdAt).toLocaleString('fr-FR', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                          })}
+                                        </span>
                                       </div>
-                                    ))}
+                                      {relatedIncidents[0].notes && (
+                                        <p className="text-on-surface-variant font-sans text-xs bg-surface-container/60 p-1.5 rounded">
+                                          "{relatedIncidents[0].notes}"
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -1524,24 +1382,16 @@ export const FleetDashboard: React.FC = () => {
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            {/* Sélecteur de statut rapide */}
+                            {/* Bouton de statut rapide */}
                             {can('fleet:manage') && (
-                              <select
-                                value={tr.status}
-                                onChange={(e) =>
-                                  handleStandaloneVehicleStatusChange(
-                                    'trailer',
-                                    tr,
-                                    e.target.value as VehicleStatus
-                                  )
-                                }
-                                aria-label={`Statut de la remorque ${tr.plateNumber}`}
-                                className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-1 px-1.5 focus:outline-none focus:border-[#4edea3]"
+                              <button
+                                type="button"
+                                onClick={() => openStandaloneStatusModal('trailer', tr)}
+                                className="px-2 py-1 rounded bg-surface-container hover:bg-surface-variant border border-[#334155] hover:border-primary text-on-surface text-[10px] font-semibold transition-colors flex items-center gap-1"
                               >
-                                <option value="in_service">En Service</option>
-                                <option value="breakdown">En Panne</option>
-                                <option value="maintenance">Maintenance</option>
-                              </select>
+                                <Wrench className="w-3 h-3 text-primary" />
+                                <span>Statut...</span>
+                              </button>
                             )}
 
                             {/* Bouton atteler */}
@@ -1585,48 +1435,64 @@ export const FleetDashboard: React.FC = () => {
                                   </p>
                                 ) : (
                                   <div className="flex flex-col gap-1.5">
-                                    {relatedIncidents.slice(0, 2).map((inc) => (
-                                      <div
-                                        key={inc.id}
-                                        className="p-2 rounded bg-[#020617]/80 border border-[#334155]/70 flex flex-col gap-1 text-[11px]"
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <span className="text-on-surface-variant text-[10px] uppercase font-medium">
+                                        Dernière intervention :
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setHistoryModalTarget({
+                                            title: `Historique des interventions — Remorque ${tr.plateNumber}`,
+                                            subtitle: `Type : ${tr.trailerType}`,
+                                            incidents: relatedIncidents,
+                                          })
+                                        }
+                                        className="text-primary hover:underline font-mono text-[11px] flex items-center gap-1"
                                       >
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
-                                              inc.type === 'breakdown'
+                                        <Clock className="w-3 h-3" />
+                                        <span>Voir l'historique ({relatedIncidents.length})</span>
+                                      </button>
+                                    </div>
+                                    <div className="p-2 rounded bg-[#020617]/80 border border-[#334155]/70 flex flex-col gap-1 text-[11px]">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                          <span
+                                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
+                                              relatedIncidents[0].type === 'breakdown'
                                                 ? 'bg-red-950/80 text-red-300 border border-red-500/40'
                                                 : 'bg-amber-950/80 text-amber-300 border border-amber-500/40'
-                                            }`}>
-                                              {inc.type === 'breakdown' ? 'Panne' : 'Maintenance'}
-                                            </span>
-                                            {inc.category && (
-                                              <span className="font-semibold text-on-surface">
-                                                {inc.category.name}
-                                              </span>
-                                            )}
-                                            {inc.garage && (
-                                              <span className="text-on-surface-variant">
-                                                @ {inc.garage.name}
-                                              </span>
-                                            )}
-                                          </div>
-                                          <span className="text-[10px] text-on-surface-variant flex items-center gap-1">
-                                            <Clock className="w-3 h-3" />
-                                            {new Date(inc.createdAt).toLocaleString('fr-FR', {
-                                              day: '2-digit',
-                                              month: '2-digit',
-                                              hour: '2-digit',
-                                              minute: '2-digit',
-                                            })}
+                                            }`}
+                                          >
+                                            {relatedIncidents[0].type === 'breakdown' ? 'Panne' : 'Maintenance'}
                                           </span>
+                                          {relatedIncidents[0].category && (
+                                            <span className="font-semibold text-on-surface">
+                                              {relatedIncidents[0].category.name}
+                                            </span>
+                                          )}
+                                          {relatedIncidents[0].garage && (
+                                            <span className="text-on-surface-variant">
+                                              @ {relatedIncidents[0].garage.name}
+                                            </span>
+                                          )}
                                         </div>
-                                        {inc.notes && (
-                                          <p className="text-on-surface-variant font-sans text-xs bg-surface-container/60 p-1.5 rounded">
-                                            "{inc.notes}"
-                                          </p>
-                                        )}
+                                        <span className="text-[10px] text-on-surface-variant flex items-center gap-1">
+                                          <Clock className="w-3 h-3" />
+                                          {new Date(relatedIncidents[0].createdAt).toLocaleString('fr-FR', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                          })}
+                                        </span>
                                       </div>
-                                    ))}
+                                      {relatedIncidents[0].notes && (
+                                        <p className="text-on-surface-variant font-sans text-xs bg-surface-container/60 p-1.5 rounded">
+                                          "{relatedIncidents[0].notes}"
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -1681,27 +1547,28 @@ export const FleetDashboard: React.FC = () => {
         />
       )}
 
-      {/* Modale de Déclaration de Panne */}
-      {breakdownTarget && (
-        <BreakdownModal
-          isOpen={!!breakdownTarget}
-          onClose={() => setBreakdownTarget(null)}
-          target={breakdownTarget}
-          initialScope={breakdownInitialScope}
+      {/* Modale Unique de Changement de Statut */}
+      {statusModalTarget && (
+        <StatusChangeModal
+          isOpen={!!statusModalTarget}
+          onClose={() => setStatusModalTarget(null)}
+          target={statusModalTarget}
+          initialScope={statusModalScope}
+          initialAction={statusModalAction}
           categories={data?.breakdownCategories || []}
+          garages={data?.garages || []}
           onSuccess={loadFleet}
         />
       )}
 
-      {/* Modale de Maintenance */}
-      {maintenanceTarget && (
-        <MaintenanceModal
-          isOpen={!!maintenanceTarget}
-          onClose={() => setMaintenanceTarget(null)}
-          target={maintenanceTarget}
-          initialScope={maintenanceInitialScope}
-          garages={data?.garages || []}
-          onSuccess={loadFleet}
+      {/* Modale d'Historique des Interventions */}
+      {historyModalTarget && (
+        <IncidentHistoryModal
+          isOpen={!!historyModalTarget}
+          onClose={() => setHistoryModalTarget(null)}
+          title={historyModalTarget.title}
+          subtitle={historyModalTarget.subtitle}
+          incidents={historyModalTarget.incidents}
         />
       )}
 

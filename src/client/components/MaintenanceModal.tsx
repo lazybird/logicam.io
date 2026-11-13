@@ -113,7 +113,7 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
             </div>
             <div>
               <h2 className="font-mono text-sm font-bold text-on-surface">
-                Placer en Maintenance / Atelier
+                Placer en Maintenance
               </h2>
               <p className="font-mono text-xs text-[#ffb77d]">
                 {isCoupling
