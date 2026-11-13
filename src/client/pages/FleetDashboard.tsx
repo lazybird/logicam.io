@@ -572,19 +572,18 @@ export const FleetDashboard: React.FC = () => {
             <table className="w-full text-left border-collapse font-mono text-xs">
               <thead className="sticky top-0 bg-surface-container-highest border-b border-[#334155] z-10">
                 <tr>
-                  {/* Sur mobile, colonne compacte N° Ordre + bouton chevron */}
-                  <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">N° ORDRE</th>
-                  <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">TRACTEUR</th>
-                  <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">REMORQUE</th>
+                  {/* Sur desktop (md+), colonne N° ORDRE complète */}
+                  <th className="hidden md:table-cell py-2.5 px-3 uppercase text-on-surface-variant font-medium">N° ORDRE</th>
+                  <th className="py-2.5 px-2.5 sm:px-3 uppercase text-on-surface-variant font-medium">TRACTEUR</th>
+                  <th className="py-2.5 px-2.5 sm:px-3 uppercase text-on-surface-variant font-medium">REMORQUE</th>
                   {/* Colonnes masquées sur mobile (< md) car détaillées dans l'accordéon */}
                   <th className="hidden md:table-cell py-2.5 px-3 uppercase text-on-surface-variant font-medium">TYPE</th>
-                  <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">STATUT</th>
+                  <th className="py-2.5 px-2 sm:px-3 uppercase text-on-surface-variant font-medium">STATUT</th>
                   <th className="hidden md:table-cell py-2.5 px-3 uppercase text-on-surface-variant font-medium text-right">
                     KILOMÉTRAGE
                   </th>
-                  <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium text-center">
-                    <span className="hidden md:inline">ACTIONS</span>
-                    <span className="md:hidden">DÉTAIL</span>
+                  <th className="hidden md:table-cell py-2.5 px-3 uppercase text-on-surface-variant font-medium text-center">
+                    ACTIONS
                   </th>
                 </tr>
               </thead>
@@ -613,53 +612,73 @@ export const FleetDashboard: React.FC = () => {
                       <React.Fragment key={row.id}>
                         <tr
                           onClick={() => toggleRowExpanded(row.id)}
-                          className={`transition-colors cursor-pointer md:cursor-default ${
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              toggleRowExpanded(row.id);
+                            }
+                          }}
+                          aria-expanded={isExpanded}
+                          aria-label={`Attelage ${row.orderNumber}, Tracteur ${row.tractorPlate}, Remorque ${row.trailerPlate}. Cliquer pour ${isExpanded ? 'replier' : 'déplier'} les détails et actions.`}
+                          className={`transition-colors cursor-pointer select-none ${
                             isExpanded ? 'bg-surface-container-high/60' : 'hover:bg-surface-variant/30 bg-surface'
                           }`}
                         >
-                          {/* N° Ordre */}
-                          <td className="py-2.5 px-3 text-[#ffb77d] font-semibold whitespace-nowrap">
+                          {/* N° Ordre (Desktop md+ uniquement) */}
+                          <td className="hidden md:table-cell py-2.5 px-3 text-[#ffb77d] font-semibold whitespace-nowrap">
+                            <span>{row.orderNumber}</span>
+                          </td>
+
+                          {/* Tracteur (avec chevron indicateur et pastille N° ordre sur mobile) */}
+                          <td className="py-2 px-2.5 sm:px-3">
                             <div className="flex items-center gap-1.5">
-                              <span className="md:hidden text-on-surface-variant">
+                              {/* Indicateur dépliable chevron (mobile uniquement) */}
+                              <span className="md:hidden text-on-surface-variant shrink-0" aria-hidden="true">
                                 {isExpanded ? (
                                   <ChevronDown className="w-3.5 h-3.5 text-[#ff8c00]" />
                                 ) : (
                                   <ChevronRight className="w-3.5 h-3.5" />
                                 )}
                               </span>
-                              <span>{row.orderNumber}</span>
-                            </div>
-                          </td>
 
-                          {/* Tracteur */}
-                          <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-1.5 font-semibold text-on-surface">
-                              <span>{row.tractorPlate}</span>
-                              {row.tractorStatus === 'breakdown' && (
-                                <span className="px-1 py-0.2 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px] font-normal" title="Tracteur en panne">
-                                  Panne
-                                </span>
-                              )}
-                            </div>
-                            {row.tractorBrandModel && (
-                              <div className="text-[10px] text-on-surface-variant font-sans truncate max-w-[110px] sm:max-w-none">
-                                {row.tractorBrandModel}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1 font-semibold text-on-surface">
+                                  <span className="truncate">{row.tractorPlate}</span>
+                                  {row.tractorStatus === 'breakdown' && (
+                                    <span className="px-1 py-0.2 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px] font-normal shrink-0" title="Tracteur en panne">
+                                      Panne
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px] text-on-surface-variant font-sans">
+                                  {/* Sur mobile, rappel discret du N° d'ordre en indice */}
+                                  <span className="md:hidden font-mono text-[#ffb77d]/90 font-medium shrink-0">
+                                    {row.orderNumber}
+                                  </span>
+                                  {row.tractorBrandModel && (
+                                    <span className="truncate max-w-[90px] sm:max-w-none">
+                                      {row.tractorBrandModel}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            )}
+                            </div>
                           </td>
 
                           {/* Remorque */}
-                          <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-1.5 font-semibold text-on-surface">
-                              <span>{row.trailerPlate}</span>
+                          <td className="py-2 px-2.5 sm:px-3">
+                            <div className="flex items-center gap-1 font-semibold text-on-surface">
+                              <span className="truncate">{row.trailerPlate}</span>
                               {row.trailerStatus === 'breakdown' && (
-                                <span className="px-1 py-0.2 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px] font-normal" title="Remorque en panne">
+                                <span className="px-1 py-0.2 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px] font-normal shrink-0" title="Remorque en panne">
                                   Panne
                                 </span>
                               )}
                             </div>
                             {row.driverName ? (
-                              <div className="text-[10px] text-on-surface-variant font-sans truncate max-w-[110px] sm:max-w-none">
+                              <div className="text-[10px] text-on-surface-variant font-sans truncate max-w-[95px] sm:max-w-none">
                                 {row.driverName}
                               </div>
                             ) : (
@@ -677,7 +696,7 @@ export const FleetDashboard: React.FC = () => {
                           </td>
 
                           {/* Statut */}
-                          <td className="py-2.5 px-3 whitespace-nowrap">
+                          <td className="py-2 px-2 sm:px-3 whitespace-nowrap">
                             {isBreakdown ? (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-950/40 text-[#ffb4ab] border border-red-500/40 text-[10px]">
                                 <span className="w-1.5 h-1.5 rounded-full bg-[#ffb4ab]"></span>
@@ -706,13 +725,12 @@ export const FleetDashboard: React.FC = () => {
                             )}
                           </td>
 
-                          {/* Actions (Desktop: sélecteur + unlink direct ; Mobile: bouton déplier/action) */}
+                          {/* Actions (Desktop md+ uniquement) */}
                           <td
-                            className="py-2.5 px-3 text-center whitespace-nowrap"
+                            className="hidden md:table-cell py-2.5 px-3 text-center whitespace-nowrap"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {/* Version Desktop md+ */}
-                            <div className="hidden md:flex items-center justify-center gap-1.5">
+                            <div className="flex items-center justify-center gap-1.5">
                               {can('fleet:manage') && (
                                 <select
                                   value={
@@ -749,54 +767,43 @@ export const FleetDashboard: React.FC = () => {
                                 </button>
                               )}
                             </div>
-
-                            {/* Version Mobile < md : Toggle Accordéon accessible */}
-                            <div className="md:hidden flex items-center justify-center">
-                              <button
-                                type="button"
-                                onClick={() => toggleRowExpanded(row.id)}
-                                className={`p-1.5 rounded transition-colors flex items-center gap-1 text-[11px] ${
-                                  isExpanded
-                                    ? 'bg-[#ff8c00]/20 text-[#ffb77d]'
-                                    : 'hover:bg-surface-variant text-on-surface-variant'
-                                }`}
-                                aria-label={`${isExpanded ? 'Masquer' : 'Afficher'} les détails et actions de ${row.orderNumber}`}
-                                aria-expanded={isExpanded}
-                              >
-                                {isExpanded ? (
-                                  <>
-                                    <ChevronDown className="w-4 h-4 text-[#ff8c00]" />
-                                    <span className="font-sans font-medium text-[10px]">Fermer</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <ChevronRight className="w-4 h-4" />
-                                    <span className="font-sans font-medium text-[10px]">Actions</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
                           </td>
                         </tr>
 
                         {/* Accordéon Dépliable sur Mobile (< md) */}
                         {isExpanded && (
                           <tr className="md:hidden bg-[#020617]/95 border-y border-[#334155]">
-                            <td colSpan={5} className="p-3">
+                            <td colSpan={3} className="p-3">
                               <div className="flex flex-col gap-3 font-mono text-xs">
+                                {/* En-tête de l'accordéon : Rappel N° Ordre & Type */}
+                                <div className="flex items-center justify-between text-[11px] pb-1 border-b border-[#334155]/40">
+                                  <span className="text-on-surface-variant">
+                                    N° d'ordre : <strong className="text-[#ffb77d]">{row.orderNumber}</strong>
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded bg-surface-container-high border border-[#334155] text-[10px] uppercase text-on-surface-variant">
+                                    {row.trailerType}
+                                  </span>
+                                </div>
+
                                 {/* Détails complémentaires */}
                                 <div className="grid grid-cols-2 gap-2 bg-surface-container border border-[#334155]/60 rounded p-2.5 text-[11px]">
                                   <div>
-                                    <span className="text-on-surface-variant block text-[10px]">TYPE REMORQUE</span>
-                                    <span className="font-bold text-on-surface">{row.trailerType}</span>
+                                    <span className="text-on-surface-variant block text-[10px]">TRACTEUR</span>
+                                    <span className="font-bold text-on-surface">{row.tractorPlate}</span>
+                                    {row.tractorBrandModel && (
+                                      <span className="text-[10px] text-on-surface-variant block font-sans">
+                                        {row.tractorBrandModel}
+                                      </span>
+                                    )}
                                   </div>
                                   <div>
-                                    <span className="text-on-surface-variant block text-[10px]">CHAUFFEUR</span>
-                                    <span className="font-bold text-on-surface">
-                                      {row.driverName || 'Non assigné'}
+                                    <span className="text-on-surface-variant block text-[10px]">REMORQUE & CHAUFFEUR</span>
+                                    <span className="font-bold text-on-surface">{row.trailerPlate}</span>
+                                    <span className="text-[10px] text-on-surface-variant block font-sans">
+                                      {row.driverName || 'Chauffeur non assigné'}
                                     </span>
                                   </div>
-                                  <div className="col-span-2 pt-1 border-t border-[#334155]/50 flex items-center justify-between">
+                                  <div className="col-span-2 pt-1.5 border-t border-[#334155]/50 flex items-center justify-between">
                                     <div className="flex items-center gap-1.5 text-on-surface-variant">
                                       <Gauge className="w-3.5 h-3.5 text-primary" />
                                       <span>{(row.mileageKm ?? 0).toLocaleString()} km</span>
