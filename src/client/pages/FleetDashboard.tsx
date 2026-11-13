@@ -843,49 +843,103 @@ export const FleetDashboard: React.FC = () => {
                                   </div>
                                 </div>
 
-                                {/* Actions Mobile avec libellés complets */}
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-0.5">
+                                {/* Actions Mobile : Gestion distincte Tracteur & Benne + Désattelage */}
+                                <div className="flex flex-col gap-2 pt-1 border-t border-[#334155]/50">
+                                  {/* Gestion séparée des statuts Tracteur & Benne */}
                                   {can('fleet:manage') && (
-                                    <div className="flex-1 flex flex-col gap-1">
-                                      <label
-                                        htmlFor={`acc-status-${row.id}`}
-                                        className="text-[10px] uppercase text-on-surface-variant"
-                                      >
-                                        Changer le statut :
-                                      </label>
-                                      <select
-                                        id={`acc-status-${row.id}`}
-                                        value={
-                                          row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown'
-                                            ? 'breakdown'
-                                            : row.tractorStatus === 'maintenance' || row.trailerStatus === 'maintenance'
-                                            ? 'maintenance'
-                                            : 'in_service'
-                                        }
-                                        onChange={(e) =>
-                                          handleStatusChangeRequest(
-                                            row,
-                                            e.target.value as VehicleStatus
-                                          )
-                                        }
-                                        className="w-full bg-[#0b1326] border border-[#334155] rounded py-2 px-2.5 font-mono text-xs text-on-surface focus:outline-none focus:border-[#ff8c00]"
-                                      >
-                                        <option value="in_service">En Service</option>
-                                        <option value="breakdown">En Panne</option>
-                                        <option value="maintenance">Maintenance</option>
-                                      </select>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      {/* Action Tracteur */}
+                                      <div className="flex flex-col gap-1 p-2 rounded-lg bg-[#020617]/70 border border-[#334155]/60">
+                                        <div className="flex items-center justify-between text-[11px]">
+                                          <span className="text-on-surface-variant flex items-center gap-1">
+                                            <Truck className="w-3 h-3 text-[#ff8c00]" /> Tracteur :
+                                          </span>
+                                          <strong className="text-on-surface">{row.tractorPlate}</strong>
+                                        </div>
+                                        <select
+                                          value={row.tractorStatus}
+                                          onChange={(e) =>
+                                            handleStandaloneVehicleStatusChange(
+                                              'tractor',
+                                              {
+                                                id: row.tractorId,
+                                                organizationId: row.organizationId,
+                                                plateNumber: row.tractorPlate,
+                                                brandModel: row.tractorBrandModel || null,
+                                                status: row.tractorStatus,
+                                                mileageKm: row.mileageKm || 0,
+                                                nextOilChangeKm: row.nextOilChangeKm || null,
+                                                createdAt: row.coupledAt,
+                                              },
+                                              e.target.value as VehicleStatus
+                                            )
+                                          }
+                                          aria-label={`Statut du tracteur ${row.tractorPlate}`}
+                                          className={`w-full border rounded text-[11px] font-mono py-1.5 px-2 focus:outline-none focus:ring-1 cursor-pointer font-medium transition-colors ${
+                                            row.tractorStatus === 'breakdown'
+                                              ? 'bg-red-950/60 border-red-500/60 text-red-300'
+                                              : row.tractorStatus === 'maintenance'
+                                              ? 'bg-amber-950/60 border-amber-500/60 text-amber-300'
+                                              : 'bg-emerald-950/60 border-emerald-500/60 text-[#4edea3]'
+                                          }`}
+                                        >
+                                          <option value="in_service" className="bg-[#020617] text-[#4edea3]">Tracteur En Service</option>
+                                          <option value="breakdown" className="bg-[#020617] text-red-300">Tracteur En Panne</option>
+                                          <option value="maintenance" className="bg-[#020617] text-amber-300">Tracteur Maintenance</option>
+                                        </select>
+                                      </div>
+
+                                      {/* Action Remorque / Benne */}
+                                      <div className="flex flex-col gap-1 p-2 rounded-lg bg-[#020617]/70 border border-[#334155]/60">
+                                        <div className="flex items-center justify-between text-[11px]">
+                                          <span className="text-on-surface-variant flex items-center gap-1">
+                                            <Truck className="w-3 h-3 text-[#4edea3]" /> Remorque ({row.trailerType}) :
+                                          </span>
+                                          <strong className="text-on-surface">{row.trailerPlate}</strong>
+                                        </div>
+                                        <select
+                                          value={row.trailerStatus}
+                                          onChange={(e) =>
+                                            handleStandaloneVehicleStatusChange(
+                                              'trailer',
+                                              {
+                                                id: row.trailerId,
+                                                organizationId: row.organizationId,
+                                                plateNumber: row.trailerPlate,
+                                                trailerType: row.trailerType as any,
+                                                status: row.trailerStatus,
+                                                createdAt: row.coupledAt,
+                                              },
+                                              e.target.value as VehicleStatus
+                                            )
+                                          }
+                                          aria-label={`Statut de la remorque ${row.trailerPlate}`}
+                                          className={`w-full border rounded text-[11px] font-mono py-1.5 px-2 focus:outline-none focus:ring-1 cursor-pointer font-medium transition-colors ${
+                                            row.trailerStatus === 'breakdown'
+                                              ? 'bg-red-950/60 border-red-500/60 text-red-300'
+                                              : row.trailerStatus === 'maintenance'
+                                              ? 'bg-amber-950/60 border-amber-500/60 text-amber-300'
+                                              : 'bg-emerald-950/60 border-emerald-500/60 text-[#4edea3]'
+                                          }`}
+                                        >
+                                          <option value="in_service" className="bg-[#020617] text-[#4edea3]">Remorque En Service</option>
+                                          <option value="breakdown" className="bg-[#020617] text-red-300">Remorque En Panne</option>
+                                          <option value="maintenance" className="bg-[#020617] text-amber-300">Remorque Maintenance</option>
+                                        </select>
+                                      </div>
                                     </div>
                                   )}
 
+                                  {/* Bouton Désatteler harmonisé */}
                                   {can('couplings:change') && (
                                     <button
                                       type="button"
                                       onClick={() => handleUncouple(row.id)}
-                                      className="flex items-center justify-center gap-2 py-2 px-3 rounded border border-red-500/40 text-red-400 hover:bg-red-950/40 hover:text-red-300 font-mono text-xs transition-colors shrink-0 self-end sm:self-auto w-full sm:w-auto"
+                                      className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-950/40 hover:text-red-300 font-mono text-xs transition-colors"
                                       aria-label={`Désatteler l'attelage ${row.orderNumber}`}
                                     >
                                       <Unlink className="w-4 h-4" />
-                                      <span className="font-medium">Désatteler l'attelage</span>
+                                      <span className="font-semibold">Désatteler l'attelage</span>
                                     </button>
                                   )}
                                 </div>
