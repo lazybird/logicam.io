@@ -851,7 +851,7 @@ export const FleetDashboard: React.FC = () => {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#334155]/40 font-mono">
+              <tbody className="divide-y divide-[#334155]/60 font-mono">
                 {filteredCouplings.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-on-surface-variant">
@@ -859,7 +859,7 @@ export const FleetDashboard: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredCouplings.map((row) => {
+                  filteredCouplings.map((row, idx) => {
                     const isBreakdown =
                       row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown';
                     const isMaintenance =
@@ -871,6 +871,7 @@ export const FleetDashboard: React.FC = () => {
                       row.nextOilChangeKm - row.mileageKm <= 5000;
 
                     const isExpanded = expandedRowIds.has(row.id);
+                    const isEven = idx % 2 === 0;
 
                     return (
                       <React.Fragment key={row.id}>
@@ -888,37 +889,39 @@ export const FleetDashboard: React.FC = () => {
                           aria-label={`Attelage ${row.orderNumber}, Tracteur ${row.tractorPlate}, Remorque ${row.trailerPlate}. Cliquer pour ${isExpanded ? 'replier' : 'déplier'} les détails et actions.`}
                           className={`transition-all cursor-pointer select-none relative ${
                             isExpanded
-                              ? `bg-[#131d36] shadow-md border-l-4 ${
+                              ? `bg-[#18233f] shadow-lg border-l-4 ${
                                   isBreakdown
                                     ? 'border-l-red-500'
                                     : isMaintenance
                                     ? 'border-l-amber-500'
                                     : 'border-l-[#ff8c00]'
                                 }`
-                              : 'hover:bg-surface-variant/40 bg-surface border-l-4 border-l-transparent'
+                              : isEven
+                              ? 'bg-[#0f172a] hover:bg-[#1e293b] border-l-4 border-l-transparent'
+                              : 'bg-[#0b1326] hover:bg-[#1e293b] border-l-4 border-l-transparent'
                           }`}
                         >
                           {/* N° Ordre (Desktop md+ uniquement) */}
-                          <td className="hidden md:table-cell py-2.5 px-3 whitespace-nowrap">
+                          <td className="hidden md:table-cell py-3 px-3 whitespace-nowrap">
                             <span className={`font-semibold ${isExpanded ? 'text-[#ffb77d] underline decoration-[#ff8c00]/60 underline-offset-4' : 'text-[#ffb77d]'}`}>
                               {row.orderNumber}
                             </span>
                           </td>
 
                           {/* Tracteur (avec chevron indicateur et pastille N° ordre sur mobile) */}
-                          <td className="py-2 px-2.5 sm:px-3">
-                            <div className="flex items-center gap-1.5">
+                          <td className="py-2.5 px-2.5 sm:px-3">
+                            <div className="flex items-center gap-2">
                               {/* Indicateur dépliable chevron */}
                               <span className="text-on-surface-variant shrink-0" aria-hidden="true">
                                 {isExpanded ? (
-                                  <ChevronDown className="w-3.5 h-3.5 text-[#ff8c00]" />
+                                  <ChevronDown className="w-4 h-4 text-[#ff8c00]" />
                                 ) : (
-                                  <ChevronRight className="w-3.5 h-3.5 text-on-surface-variant group-hover:text-primary" />
+                                  <ChevronRight className="w-4 h-4 text-on-surface-variant group-hover:text-primary" />
                                 )}
                               </span>
 
                               <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 font-semibold text-on-surface">
+                                <div className="flex items-center gap-1.5 font-bold text-on-surface text-[13px]">
                                   <span className="truncate">{row.tractorPlate}</span>
                                   {row.tractorStatus === 'breakdown' ? (
                                     <button
@@ -960,7 +963,7 @@ export const FleetDashboard: React.FC = () => {
                                     {row.orderNumber}
                                   </span>
                                   {row.tractorBrandModel && (
-                                    <span className="truncate max-w-[90px] sm:max-w-none">
+                                    <span className="truncate max-w-[90px] sm:max-w-none text-[#94a3b8]">
                                       {row.tractorBrandModel}
                                     </span>
                                   )}
@@ -970,8 +973,8 @@ export const FleetDashboard: React.FC = () => {
                           </td>
 
                           {/* Remorque */}
-                          <td className="py-2 px-2.5 sm:px-3">
-                            <div className="flex items-center gap-1.5 font-semibold text-on-surface">
+                          <td className="py-2.5 px-2.5 sm:px-3">
+                            <div className="flex items-center gap-1.5 font-bold text-on-surface text-[13px]">
                               <span className="truncate">{row.trailerPlate}</span>
                               {row.trailerStatus === 'breakdown' ? (
                                 <button
@@ -1039,7 +1042,7 @@ export const FleetDashboard: React.FC = () => {
 
                           {/* Kilométrage (Desktop uniquement) */}
                           <td className="hidden md:table-cell py-2.5 px-3 text-right whitespace-nowrap">
-                            <div>{(row.mileageKm ?? 0).toLocaleString()} km</div>
+                            <div className="text-[13px] font-medium">{(row.mileageKm ?? 0).toLocaleString()} km</div>
                             {oilDue && (
                               <button
                                 type="button"
@@ -1058,14 +1061,14 @@ export const FleetDashboard: React.FC = () => {
 
                         {/* Accordéon Dépliable (Desktop & Mobile) — Détails de panne, infos complémentaires et actions */}
                         {isExpanded && (
-                          <tr className={`bg-[#060c1d] border-b-2 border-t border-[#334155] ${
+                          <tr className={`bg-[#0d162a] border-b-2 border-t border-[#334155] shadow-inner ${
                             isBreakdown
                               ? 'border-l-4 border-l-red-500'
                               : isMaintenance
                               ? 'border-l-4 border-l-amber-500'
                               : 'border-l-4 border-l-[#ff8c00]'
                           }`}>
-                            <td colSpan={5} className="p-3 sm:p-4">
+                            <td colSpan={5} className="p-3.5 sm:p-4">
                               <div className="flex flex-col gap-3 font-mono text-xs">
                                  {/* Section 1 : Détail du Diagnostic & Immobilisation en cours */}
                                 {(isBreakdown || isMaintenance) && (
@@ -1255,23 +1258,23 @@ export const FleetDashboard: React.FC = () => {
                                 )}
 
                                 {/* Section 2 : Fiche technique complémentaire (Type remorque, Kilométrage, Vidange, Conducteur) */}
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-surface-container border border-[#334155]/60 rounded p-2.5 text-[11px]">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-[#17233f] border border-[#334155] rounded-lg p-3 text-[11px] shadow-sm">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-on-surface-variant text-[10px] uppercase">Remorque :</span>
-                                    <span className="px-1.5 py-0.5 rounded bg-surface-container-high border border-[#334155] text-[10px] uppercase font-bold text-on-surface">
+                                    <span className="text-on-surface-variant text-[10px] uppercase font-semibold">Remorque :</span>
+                                    <span className="px-2 py-0.5 rounded bg-surface-container-high border border-[#475569] text-[10px] uppercase font-bold text-on-surface">
                                       {row.trailerType}
                                     </span>
                                   </div>
 
                                   <div className="flex items-center gap-2">
-                                    <span className="text-on-surface-variant text-[10px] uppercase">Conducteur :</span>
-                                    <span className="text-on-surface truncate">
+                                    <span className="text-on-surface-variant text-[10px] uppercase font-semibold">Conducteur :</span>
+                                    <span className="text-on-surface font-medium truncate">
                                       {row.driverName || 'Non assigné'}
                                     </span>
                                   </div>
 
                                   <div className="flex items-center justify-between sm:justify-end gap-2 text-on-surface-variant">
-                                    <div className="flex items-center gap-1.5">
+                                    <div className="flex items-center gap-1.5 font-medium">
                                       <Gauge className="w-3.5 h-3.5 text-primary" />
                                       <span className="text-on-surface">{(row.mileageKm ?? 0).toLocaleString()} km</span>
                                     </div>
@@ -1284,15 +1287,15 @@ export const FleetDashboard: React.FC = () => {
                                 </div>
 
                                 {/* Section 3 : Actions rapides globales sur l'attelage */}
-                                <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-[#334155]/50 items-stretch sm:items-center justify-between">
+                                <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-[#334155]/70 items-stretch sm:items-center justify-between">
                                   {/* Bouton unique pour changer le statut */}
                                   {can('fleet:manage') && (
-                                    <div className="flex items-center justify-between p-2 rounded-lg bg-[#020617]/70 border border-[#334155]/60 gap-3 flex-1">
+                                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#0b1326] border border-[#334155] gap-3 flex-1 shadow-sm">
                                       <div className="flex flex-col">
                                         <span className="text-[10px] uppercase font-mono tracking-wider text-on-surface-variant font-medium">
                                           Statut global de l'attelage
                                         </span>
-                                        <span className="text-[11px] font-mono text-on-surface">
+                                        <span className="text-[11px] font-mono text-on-surface font-semibold">
                                           {isBreakdown
                                             ? `En Panne (${row.tractorStatus === 'breakdown' && row.trailerStatus === 'breakdown' ? 'Ensemble' : row.tractorStatus === 'breakdown' ? 'Tracteur seul' : 'Remorque seule'})`
                                             : isMaintenance
@@ -1304,7 +1307,7 @@ export const FleetDashboard: React.FC = () => {
                                       <button
                                         type="button"
                                         onClick={() => openCouplingStatusModal(row, 'both')}
-                                        className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-variant border border-[#334155] hover:border-primary text-on-surface text-xs font-semibold transition-colors flex items-center gap-2"
+                                        className="px-3 py-1.5 rounded-lg bg-[#1e293b] hover:bg-[#334155] border border-[#475569] hover:border-primary text-on-surface text-xs font-semibold transition-colors flex items-center gap-2"
                                       >
                                         <Wrench className="w-3.5 h-3.5 text-primary" />
                                         <span>Changer le statut...</span>
@@ -1317,10 +1320,10 @@ export const FleetDashboard: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={() => handleUncouple(row.id)}
-                                      className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-950/40 hover:text-red-300 font-mono text-xs transition-colors shrink-0"
+                                      className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-red-500/50 bg-[#1f131a] text-red-300 hover:bg-red-950/60 hover:text-red-200 font-mono text-xs transition-colors shrink-0 shadow-sm"
                                       aria-label={`Désatteler l'attelage ${row.orderNumber}`}
                                     >
-                                      <Unlink className="w-4 h-4" />
+                                      <Unlink className="w-4 h-4 text-red-400" />
                                       <span className="font-semibold">Désatteler</span>
                                     </button>
                                   )}
