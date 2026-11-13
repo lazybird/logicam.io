@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { eq, and, sql, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tractors, trailers, couplings, breakdownCategories } from '../db/schema.js';
+import { tractors, trailers, couplings, breakdownCategories, garages } from '../db/schema.js';
 import { parseTrucksExcelFile } from '../services/excelImporter.js';
 import {
   authMiddleware,
@@ -16,6 +16,7 @@ import type {
   VehicleStatus,
   TrailerType,
   BreakdownCategoryDTO,
+  GarageDTO,
 } from '../../shared/types.js';
 
 export const fleetRouter = new Hono<{ Variables: AuthContextVariables }>();
@@ -49,6 +50,11 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
     .select()
     .from(breakdownCategories)
     .where(eq(breakdownCategories.organizationId, effectiveOrgId));
+
+  const allGarages = await db
+    .select()
+    .from(garages)
+    .where(eq(garages.organizationId, effectiveOrgId));
 
   // 2. Chargement des attelages
   const couplingsQuery = db
@@ -189,12 +195,21 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
     severity: c.severity,
   }));
 
+  const garagesDTO: GarageDTO[] = allGarages.map((g) => ({
+    id: g.id,
+    organizationId: g.organizationId,
+    name: g.name,
+    location: g.location,
+    contactPhone: g.contactPhone,
+  }));
+
   return c.json({
     kpis,
     couplings: couplingsDTO,
     tractors: tractorsDTO,
     trailers: trailersDTO,
     breakdownCategories: breakdownCategoriesDTO,
+    garages: garagesDTO,
   });
 });
 

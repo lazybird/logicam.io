@@ -23,6 +23,7 @@ import { useAuth, useTeamPolicy } from '../context/AuthContext';
 import { CouplingModal } from '../components/CouplingModal';
 import { UncoupleModal } from '../components/UncoupleModal';
 import { BreakdownModal, type BreakdownTargetPayload } from '../components/BreakdownModal';
+import { MaintenanceModal } from '../components/MaintenanceModal';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import type {
   CouplingRowDTO,
@@ -32,6 +33,7 @@ import type {
   TrailerType,
   VehicleStatus,
   BreakdownCategoryDTO,
+  GarageDTO,
 } from '../../shared/types';
 
 interface FleetApiResponse {
@@ -44,6 +46,7 @@ interface FleetApiResponse {
   tractors: TractorDTO[];
   trailers: TrailerDTO[];
   breakdownCategories?: BreakdownCategoryDTO[];
+  garages?: GarageDTO[];
 }
 
 export const FleetDashboard: React.FC = () => {
@@ -57,6 +60,7 @@ export const FleetDashboard: React.FC = () => {
   // Filtres
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | VehicleStatus>('ALL');
+  const [unassignedStatusFilter, setUnassignedStatusFilter] = useState<'ALL' | VehicleStatus>('ALL');
   const [activeTab, setActiveTab] = useState<'couplings' | 'unassigned'>('couplings');
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
 
@@ -82,6 +86,9 @@ export const FleetDashboard: React.FC = () => {
 
   // Modale de déclaration de panne
   const [breakdownTarget, setBreakdownTarget] = useState<BreakdownTargetPayload | null>(null);
+
+  // Modale de maintenance
+  const [maintenanceTarget, setMaintenanceTarget] = useState<BreakdownTargetPayload | null>(null);
 
   // Modale d'ajout rapide de véhicule
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
@@ -157,6 +164,17 @@ export const FleetDashboard: React.FC = () => {
     return data?.trailers.filter((tr) => !tr.isCoupled) || [];
   }, [data?.trailers]);
 
+  // Véhicules libres filtrés par statut pour l'affichage de l'onglet
+  const filteredFreeTractors = useMemo(() => {
+    if (unassignedStatusFilter === 'ALL') return freeTractors;
+    return freeTractors.filter((t) => t.status === unassignedStatusFilter);
+  }, [freeTractors, unassignedStatusFilter]);
+
+  const filteredFreeTrailers = useMemo(() => {
+    if (unassignedStatusFilter === 'ALL') return freeTrailers;
+    return freeTrailers.filter((tr) => tr.status === unassignedStatusFilter);
+  }, [freeTrailers, unassignedStatusFilter]);
+
   // Véhicules libres opérationnels (en service)
   const operationalFreeTractors = useMemo(() => {
     return freeTractors.filter((t) => t.status === 'in_service');
@@ -180,7 +198,7 @@ export const FleetDashboard: React.FC = () => {
     setUncoupleTarget({ id: couplingId, label });
   };
 
-  // Changement rapide de statut d'un attelage (ou déclenchement de la modale de panne)
+  // Changement rapide de statut d'un attelage (ou déclenchement de la modale de panne/maintenance)
   const handleStatusChangeRequest = async (
     row: (typeof filteredCouplings)[number],
     newStatus: VehicleStatus
@@ -201,8 +219,24 @@ export const FleetDashboard: React.FC = () => {
       return;
     }
 
+    if (newStatus === 'maintenance') {
+      // Ouvre la modale complète pour choisir tracteur / remorque / les deux et le garage
+      setMaintenanceTarget({
+        kind: 'coupling',
+        id: row.id,
+        orderNumber: row.orderNumber,
+        tractorId: row.tractorId,
+        tractorPlate: row.tractorPlate,
+        tractorStatus: row.tractorStatus,
+        trailerId: row.trailerId,
+        trailerPlate: row.trailerPlate,
+        trailerStatus: row.trailerStatus,
+      });
+      return;
+    }
+
     try {
-      // Remise en service ou passage en maintenance : s'applique aux deux composants de l'attelage
+      // Remise en service : s'applique aux deux composants de l'attelage
       await Promise.all([
         api.patch(`/api/fleet/tractors/${row.tractorId}`, { status: newStatus }),
         api.patch(`/api/fleet/trailers/${row.trailerId}`, { status: newStatus }),
@@ -221,6 +255,18 @@ export const FleetDashboard: React.FC = () => {
   ) => {
     if (newStatus === 'breakdown') {
       setBreakdownTarget({
+        kind: 'standalone',
+        vehicleType,
+        id: vehicle.id,
+        plateNumber: vehicle.plateNumber,
+        label: vehicleType === 'tractor' ? (vehicle as TractorDTO).brandModel : (vehicle as TrailerDTO).trailerType,
+        status: vehicle.status,
+      });
+      return;
+    }
+
+    if (newStatus === 'maintenance') {
+      setMaintenanceTarget({
         kind: 'standalone',
         vehicleType,
         id: vehicle.id,
@@ -878,164 +924,200 @@ export const FleetDashboard: React.FC = () => {
 
       {/* Vue Onglet 2 : Véhicules Disponibles (Libres) */}
       {activeTab === 'unassigned' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Tracteurs libres */}
-          <div className="bg-surface border border-[#334155] rounded p-4 flex flex-col gap-3">
-            <h2 className="font-mono text-sm font-bold text-on-surface flex items-center justify-between">
-              <span>Tracteurs Non Attelés ({freeTractors.length})</span>
-              <Truck className="w-4 h-4 text-primary" />
-            </h2>
-            <div className="divide-y divide-[#334155]/40 max-h-96 overflow-y-auto">
-              {freeTractors.length === 0 ? (
-                <p className="text-xs text-on-surface-variant py-4 text-center">
-                  Tous les tracteurs sont actuellement attelés.
-                </p>
-              ) : (
-                freeTractors.map((t) => (
-                  <div key={t.id} className="py-2.5 flex items-center justify-between font-mono text-xs gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-on-surface">{t.plateNumber}</span>
-                        {t.status === 'breakdown' ? (
-                          <span className="px-1.5 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px]">
-                            Panne
-                          </span>
-                        ) : t.status === 'maintenance' ? (
-                          <span className="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-500/40 text-[9px]">
-                            Maintenance
-                          </span>
-                        ) : (
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-[#4edea3] border border-emerald-500/40 text-[9px]">
-                            Prêt
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-on-surface-variant text-[11px] truncate">
-                        {t.brandModel || 'Tracteur'} — {t.mileageKm.toLocaleString()} km
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Sélecteur de statut rapide */}
-                      {can('fleet:manage') && (
-                        <select
-                          value={t.status}
-                          onChange={(e) =>
-                            handleStandaloneVehicleStatusChange(
-                              'tractor',
-                              t,
-                              e.target.value as VehicleStatus
-                            )
-                          }
-                          aria-label={`Statut du tracteur ${t.plateNumber}`}
-                          className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-1 px-1.5 focus:outline-none focus:border-[#ff8c00]"
-                        >
-                          <option value="in_service">En Service</option>
-                          <option value="breakdown">En Panne</option>
-                          <option value="maintenance">Maintenance</option>
-                        </select>
-                      )}
-
-                      {/* Bouton atteler (désactivé ou caché si en panne/maintenance) */}
-                      {can('couplings:change') && (
-                        <button
-                          type="button"
-                          disabled={t.status !== 'in_service'}
-                          onClick={() => {
-                            setPreselectedTractorId(t.id);
-                            setPreselectedTrailerId(undefined);
-                            setIsCouplingModalOpen(true);
-                          }}
-                          className="px-2.5 py-1 rounded bg-[#ff8c00]/20 text-[#ffb77d] hover:bg-[#ff8c00]/30 border border-[#ff8c00]/40 text-[10px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                          title={t.status !== 'in_service' ? 'Véhicule immobilisé (panne ou maintenance)' : 'Atteler'}
-                        >
-                          Atteler
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
+        <div className="flex flex-col gap-4">
+          {/* Barre de filtrage par statut pour les véhicules non attelés */}
+          <div className="p-3 bg-surface border border-[#334155] rounded flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+            <span className="font-mono text-xs text-on-surface-variant font-medium">
+              Filtrer les non attelés par état :
+            </span>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none w-full sm:w-auto">
+              {(
+                [
+                  { id: 'ALL', label: 'Tous' },
+                  { id: 'in_service', label: 'Prêts / En Service' },
+                  { id: 'breakdown', label: 'En Panne' },
+                  { id: 'maintenance', label: 'Maintenance' },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setUnassignedStatusFilter(tab.id)}
+                  className={`px-2.5 py-1 rounded font-mono text-xs whitespace-nowrap transition-colors ${
+                    unassignedStatusFilter === tab.id
+                      ? 'bg-primary-container text-black font-semibold'
+                      : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-variant'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Remorques libres */}
-          <div className="bg-surface border border-[#334155] rounded p-4 flex flex-col gap-3">
-            <h2 className="font-mono text-sm font-bold text-on-surface flex items-center justify-between">
-              <span>Remorques Non Attelées ({freeTrailers.length})</span>
-              <Truck className="w-4 h-4 text-[#4edea3]" />
-            </h2>
-            <div className="divide-y divide-[#334155]/40 max-h-96 overflow-y-auto">
-              {freeTrailers.length === 0 ? (
-                <p className="text-xs text-on-surface-variant py-4 text-center">
-                  Toutes les remorques sont actuellement attelées.
-                </p>
-              ) : (
-                freeTrailers.map((tr) => (
-                  <div key={tr.id} className="py-2.5 flex items-center justify-between font-mono text-xs gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-on-surface">{tr.plateNumber}</span>
-                        {tr.status === 'breakdown' ? (
-                          <span className="px-1.5 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px]">
-                            Panne
-                          </span>
-                        ) : tr.status === 'maintenance' ? (
-                          <span className="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-500/40 text-[9px]">
-                            Maintenance
-                          </span>
-                        ) : (
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-[#4edea3] border border-emerald-500/40 text-[9px]">
-                            Prête
-                          </span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Tracteurs libres */}
+            <div className="bg-surface border border-[#334155] rounded p-4 flex flex-col gap-3">
+              <h2 className="font-mono text-sm font-bold text-on-surface flex items-center justify-between">
+                <span>Tracteurs Non Attelés ({filteredFreeTractors.length})</span>
+                <Truck className="w-4 h-4 text-primary" />
+              </h2>
+              <div className="divide-y divide-[#334155]/40 max-h-96 overflow-y-auto">
+                {filteredFreeTractors.length === 0 ? (
+                  <p className="text-xs text-on-surface-variant py-4 text-center">
+                    {unassignedStatusFilter === 'ALL'
+                      ? 'Tous les tracteurs sont actuellement attelés.'
+                      : 'Aucun tracteur libre ne correspond à ce statut.'}
+                  </p>
+                ) : (
+                  filteredFreeTractors.map((t) => (
+                    <div key={t.id} className="py-2.5 flex items-center justify-between font-mono text-xs gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-on-surface">{t.plateNumber}</span>
+                          {t.status === 'breakdown' ? (
+                            <span className="px-1.5 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px]">
+                              Panne
+                            </span>
+                          ) : t.status === 'maintenance' ? (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-500/40 text-[9px]">
+                              Maintenance
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-[#4edea3] border border-emerald-500/40 text-[9px]">
+                              Prêt
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-on-surface-variant text-[11px] truncate">
+                          {t.brandModel || 'Tracteur'} — {t.mileageKm.toLocaleString()} km
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Sélecteur de statut rapide */}
+                        {can('fleet:manage') && (
+                          <select
+                            value={t.status}
+                            onChange={(e) =>
+                              handleStandaloneVehicleStatusChange(
+                                'tractor',
+                                t,
+                                e.target.value as VehicleStatus
+                              )
+                            }
+                            aria-label={`Statut du tracteur ${t.plateNumber}`}
+                            className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-1 px-1.5 focus:outline-none focus:border-[#ff8c00]"
+                          >
+                            <option value="in_service">En Service</option>
+                            <option value="breakdown">En Panne</option>
+                            <option value="maintenance">Maintenance</option>
+                          </select>
                         )}
-                        <span className="px-1.5 py-0.2 rounded bg-surface-container border border-[#334155] text-[9px] text-on-surface-variant uppercase">
-                          {tr.trailerType}
-                        </span>
+
+                        {/* Bouton atteler (désactivé ou caché si en panne/maintenance) */}
+                        {can('couplings:change') && (
+                          <button
+                            type="button"
+                            disabled={t.status !== 'in_service'}
+                            onClick={() => {
+                              setPreselectedTractorId(t.id);
+                              setPreselectedTrailerId(undefined);
+                              setIsCouplingModalOpen(true);
+                            }}
+                            className="px-2.5 py-1 rounded bg-[#ff8c00]/20 text-[#ffb77d] hover:bg-[#ff8c00]/30 border border-[#ff8c00]/40 text-[10px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={t.status !== 'in_service' ? 'Véhicule immobilisé (panne ou maintenance)' : 'Atteler'}
+                          >
+                            Atteler
+                          </button>
+                        )}
                       </div>
                     </div>
+                  ))
+                )}
+              </div>
+            </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Sélecteur de statut rapide */}
-                      {can('fleet:manage') && (
-                        <select
-                          value={tr.status}
-                          onChange={(e) =>
-                            handleStandaloneVehicleStatusChange(
-                              'trailer',
-                              tr,
-                              e.target.value as VehicleStatus
-                            )
-                          }
-                          aria-label={`Statut de la remorque ${tr.plateNumber}`}
-                          className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-1 px-1.5 focus:outline-none focus:border-[#4edea3]"
-                        >
-                          <option value="in_service">En Service</option>
-                          <option value="breakdown">En Panne</option>
-                          <option value="maintenance">Maintenance</option>
-                        </select>
-                      )}
+            {/* Remorques libres */}
+            <div className="bg-surface border border-[#334155] rounded p-4 flex flex-col gap-3">
+              <h2 className="font-mono text-sm font-bold text-on-surface flex items-center justify-between">
+                <span>Remorques Non Attelées ({filteredFreeTrailers.length})</span>
+                <Truck className="w-4 h-4 text-[#4edea3]" />
+              </h2>
+              <div className="divide-y divide-[#334155]/40 max-h-96 overflow-y-auto">
+                {filteredFreeTrailers.length === 0 ? (
+                  <p className="text-xs text-on-surface-variant py-4 text-center">
+                    {unassignedStatusFilter === 'ALL'
+                      ? 'Toutes les remorques sont actuellement attelées.'
+                      : 'Aucune remorque libre ne correspond à ce statut.'}
+                  </p>
+                ) : (
+                  filteredFreeTrailers.map((tr) => (
+                    <div key={tr.id} className="py-2.5 flex items-center justify-between font-mono text-xs gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-on-surface">{tr.plateNumber}</span>
+                          {tr.status === 'breakdown' ? (
+                            <span className="px-1.5 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px]">
+                              Panne
+                            </span>
+                          ) : tr.status === 'maintenance' ? (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-500/40 text-[9px]">
+                              Maintenance
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-[#4edea3] border border-emerald-500/40 text-[9px]">
+                              Prête
+                            </span>
+                          )}
+                          <span className="px-1.5 py-0.2 rounded bg-surface-container border border-[#334155] text-[9px] text-on-surface-variant uppercase">
+                            {tr.trailerType}
+                          </span>
+                        </div>
+                      </div>
 
-                      {/* Bouton atteler */}
-                      {can('couplings:change') && (
-                        <button
-                          type="button"
-                          disabled={tr.status !== 'in_service'}
-                          onClick={() => {
-                            setPreselectedTrailerId(tr.id);
-                            setPreselectedTractorId(undefined);
-                            setIsCouplingModalOpen(true);
-                          }}
-                          className="px-2.5 py-1 rounded bg-[#4edea3]/20 text-[#4edea3] hover:bg-[#4edea3]/30 border border-[#4edea3]/40 text-[10px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                          title={tr.status !== 'in_service' ? 'Remorque immobilisée (panne ou maintenance)' : 'Atteler'}
-                        >
-                          Atteler
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Sélecteur de statut rapide */}
+                        {can('fleet:manage') && (
+                          <select
+                            value={tr.status}
+                            onChange={(e) =>
+                              handleStandaloneVehicleStatusChange(
+                                'trailer',
+                                tr,
+                                e.target.value as VehicleStatus
+                              )
+                            }
+                            aria-label={`Statut de la remorque ${tr.plateNumber}`}
+                            className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-1 px-1.5 focus:outline-none focus:border-[#4edea3]"
+                          >
+                            <option value="in_service">En Service</option>
+                            <option value="breakdown">En Panne</option>
+                            <option value="maintenance">Maintenance</option>
+                          </select>
+                        )}
+
+                        {/* Bouton atteler */}
+                        {can('couplings:change') && (
+                          <button
+                            type="button"
+                            disabled={tr.status !== 'in_service'}
+                            onClick={() => {
+                              setPreselectedTrailerId(tr.id);
+                              setPreselectedTractorId(undefined);
+                              setIsCouplingModalOpen(true);
+                            }}
+                            className="px-2.5 py-1 rounded bg-[#4edea3]/20 text-[#4edea3] hover:bg-[#4edea3]/30 border border-[#4edea3]/40 text-[10px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={tr.status !== 'in_service' ? 'Remorque immobilisée (panne ou maintenance)' : 'Atteler'}
+                          >
+                            Atteler
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1072,6 +1154,17 @@ export const FleetDashboard: React.FC = () => {
           onClose={() => setBreakdownTarget(null)}
           target={breakdownTarget}
           categories={data?.breakdownCategories || []}
+          onSuccess={loadFleet}
+        />
+      )}
+
+      {/* Modale de Maintenance */}
+      {maintenanceTarget && (
+        <MaintenanceModal
+          isOpen={!!maintenanceTarget}
+          onClose={() => setMaintenanceTarget(null)}
+          target={maintenanceTarget}
+          garages={data?.garages || []}
           onSuccess={loadFleet}
         />
       )}
