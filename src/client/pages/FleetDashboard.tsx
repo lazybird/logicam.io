@@ -7,6 +7,7 @@ import {
   Plus,
   FileSpreadsheet,
   Unlink,
+  Link2,
   CheckCircle2,
   Clock,
   Filter,
@@ -114,12 +115,15 @@ export const FleetDashboard: React.FC = () => {
     incidents: IncidentDTO[];
   } | null>(null);
 
-  // Modale d'ajout rapide de véhicule
+  // Modale d'ajout rapide de véhicule ou attelage
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
-  const [vehicleKind, setVehicleKind] = useState<'tractor' | 'trailer'>('tractor');
+  const [vehicleKind, setVehicleKind] = useState<'tractor' | 'trailer' | 'ensemble'>('tractor');
   const [newPlate, setNewPlate] = useState('');
   const [newModel, setNewModel] = useState('');
   const [newTrailerType, setNewTrailerType] = useState<TrailerType>('BENNE');
+  const [newTrailerPlate, setNewTrailerPlate] = useState('');
+  const [newDriverName, setNewDriverName] = useState('');
+  const [isSubmittingVehicle, setIsSubmittingVehicle] = useState(false);
 
   useEscapeKey(isAddVehicleOpen, () => setIsAddVehicleOpen(false));
 
@@ -296,32 +300,69 @@ export const FleetDashboard: React.FC = () => {
     });
   };
 
-  // Ajout de véhicule
+  // Réinitialiser les champs de la modale d'ajout
+  const resetAddVehicleForm = () => {
+    setNewPlate('');
+    setNewModel('');
+    setNewTrailerPlate('');
+    setNewDriverName('');
+    setNewTrailerType('BENNE');
+  };
+
+  // Ajout de véhicule ou d'ensemble complet
   const handleAddVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPlate.trim()) return;
 
+    if (vehicleKind === 'ensemble' && !newTrailerPlate.trim()) {
+      alert('Veuillez renseigner l’immatriculation de la remorque pour l’attelage.');
+      return;
+    }
+
+    setIsSubmittingVehicle(true);
     try {
       if (vehicleKind === 'tractor') {
         await api.post('/api/fleet/tractors', {
-          plateNumber: newPlate,
+          plateNumber: newPlate.trim(),
           brandModel: newModel.trim() || undefined,
           status: 'in_service',
         });
-      } else {
+      } else if (vehicleKind === 'trailer') {
         await api.post('/api/fleet/trailers', {
-          plateNumber: newPlate,
+          plateNumber: newPlate.trim(),
           trailerType: newTrailerType,
           status: 'in_service',
         });
+      } else if (vehicleKind === 'ensemble') {
+        // 1. Créer le tracteur
+        const createdTractor = await api.post<TractorDTO>('/api/fleet/tractors', {
+          plateNumber: newPlate.trim(),
+          brandModel: newModel.trim() || undefined,
+          status: 'in_service',
+        });
+
+        // 2. Créer la remorque
+        const createdTrailer = await api.post<TrailerDTO>('/api/fleet/trailers', {
+          plateNumber: newTrailerPlate.trim(),
+          trailerType: newTrailerType,
+          status: 'in_service',
+        });
+
+        // 3. Atteler directement les deux
+        await api.post('/api/fleet/couple', {
+          tractorId: createdTractor.id,
+          trailerId: createdTrailer.id,
+          driverName: newDriverName.trim() || undefined,
+        });
       }
 
-      setNewPlate('');
-      setNewModel('');
+      resetAddVehicleForm();
       setIsAddVehicleOpen(false);
       loadFleet();
     } catch (err: any) {
-      alert(err?.message || 'Erreur lors de l’ajout du véhicule');
+      alert(err?.message || 'Erreur lors de l’ajout');
+    } finally {
+      setIsSubmittingVehicle(false);
     }
   };
 
@@ -1886,24 +1927,35 @@ export const FleetDashboard: React.FC = () => {
         />
       )}
 
-      {/* Modale d'Ajout Rapide de Véhicule */}
+      {/* Modale d'Ajout Rapide de Véhicule ou Ensemble */}
       {isAddVehicleOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setIsAddVehicleOpen(false);
+            if (e.target === e.currentTarget && !isSubmittingVehicle) {
+              setIsAddVehicleOpen(false);
+              resetAddVehicleForm();
+            }
           }}
         >
           <div className="w-full max-w-md bg-surface border border-[#334155] rounded-xl overflow-hidden shadow-2xl">
             <div className="p-4 bg-surface-container border-b border-[#334155] flex justify-between items-center">
               <h2 className="font-mono text-sm font-bold text-on-surface flex items-center gap-2">
                 <Plus className="w-4 h-4 text-primary" />
-                <span>Ajouter un Véhicule à la Flotte</span>
+                <span>
+                  {vehicleKind === 'ensemble'
+                    ? 'Ajouter un Attelage (Tracteur + Remorque)'
+                    : 'Ajouter un Véhicule à la Flotte'}
+                </span>
               </h2>
               <button
                 type="button"
-                onClick={() => setIsAddVehicleOpen(false)}
-                className="text-on-surface-variant hover:text-on-surface p-1"
+                disabled={isSubmittingVehicle}
+                onClick={() => {
+                  setIsAddVehicleOpen(false);
+                  resetAddVehicleForm();
+                }}
+                className="text-on-surface-variant hover:text-on-surface p-1 disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1914,10 +1966,10 @@ export const FleetDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setVehicleKind('tractor')}
-                  className={`flex-1 py-2 rounded text-center transition-colors ${
+                  className={`flex-1 py-2 px-1 rounded text-center transition-colors font-semibold ${
                     vehicleKind === 'tractor'
-                      ? 'bg-[#ff8c00] text-black font-semibold'
-                      : 'bg-[#020617] border border-[#334155] text-on-surface-variant'
+                      ? 'bg-[#ff8c00] text-black'
+                      : 'bg-[#020617] border border-[#334155] text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
                   Tracteur
@@ -1925,69 +1977,185 @@ export const FleetDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setVehicleKind('trailer')}
-                  className={`flex-1 py-2 rounded text-center transition-colors ${
+                  className={`flex-1 py-2 px-1 rounded text-center transition-colors font-semibold ${
                     vehicleKind === 'trailer'
-                      ? 'bg-[#ff8c00] text-black font-semibold'
-                      : 'bg-[#020617] border border-[#334155] text-on-surface-variant'
+                      ? 'bg-[#ff8c00] text-black'
+                      : 'bg-[#020617] border border-[#334155] text-on-surface-variant hover:text-on-surface'
                   }`}
                 >
                   Remorque
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setVehicleKind('ensemble')}
+                  className={`flex-1 py-2 px-1 rounded text-center transition-colors font-semibold flex items-center justify-center gap-1.5 ${
+                    vehicleKind === 'ensemble'
+                      ? 'bg-[#ff8c00] text-black'
+                      : 'bg-[#020617] border border-[#334155] text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  <span>Attelage</span>
+                </button>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="uppercase text-on-surface">Immatriculation (Plaque)</label>
-                <input
-                  type="text"
-                  value={newPlate}
-                  onChange={(e) => setNewPlate(e.target.value)}
-                  placeholder="Ex: 5895 CAT"
-                  required
-                  className="bg-[#020617] border border-[#334155] rounded py-2 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
-                />
-              </div>
+              {vehicleKind === 'ensemble' ? (
+                <>
+                  {/* Section Tracteur */}
+                  <div className="p-3 bg-[#020617] border border-[#334155] rounded-lg flex flex-col gap-3">
+                    <span className="text-[11px] font-bold text-primary flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5" />
+                      1. Tracteur
+                    </span>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="uppercase text-on-surface text-[10px]">
+                        Immatriculation du Tracteur *
+                      </label>
+                      <input
+                        type="text"
+                        value={newPlate}
+                        onChange={(e) => setNewPlate(e.target.value)}
+                        placeholder="Ex: 5895 CAT"
+                        required
+                        className="bg-surface border border-[#334155] rounded py-1.5 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="uppercase text-on-surface text-[10px]">
+                        Marque / Modèle (optionnel)
+                      </label>
+                      <input
+                        type="text"
+                        value={newModel}
+                        onChange={(e) => setNewModel(e.target.value)}
+                        placeholder="Ex: RENAULT T-HIGH 520"
+                        className="bg-surface border border-[#334155] rounded py-1.5 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
+                      />
+                    </div>
+                  </div>
 
-              {vehicleKind === 'tractor' ? (
-                <div className="flex flex-col gap-1.5">
-                  <label className="uppercase text-on-surface">Marque / Modèle</label>
-                  <input
-                    type="text"
-                    value={newModel}
-                    onChange={(e) => setNewModel(e.target.value)}
-                    placeholder="Ex: RENAULT T-HIGH 520"
-                    className="bg-[#020617] border border-[#334155] rounded py-2 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
-                  />
-                </div>
+                  {/* Section Remorque */}
+                  <div className="p-3 bg-[#020617] border border-[#334155] rounded-lg flex flex-col gap-3">
+                    <span className="text-[11px] font-bold text-primary flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5" />
+                      2. Remorque
+                    </span>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="uppercase text-on-surface text-[10px]">
+                        Immatriculation de la Remorque *
+                      </label>
+                      <input
+                        type="text"
+                        value={newTrailerPlate}
+                        onChange={(e) => setNewTrailerPlate(e.target.value)}
+                        placeholder="Ex: 1234 REM"
+                        required
+                        className="bg-surface border border-[#334155] rounded py-1.5 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="uppercase text-on-surface text-[10px]">
+                        Type de Remorque
+                      </label>
+                      <select
+                        value={newTrailerType}
+                        onChange={(e) => setNewTrailerType(e.target.value as TrailerType)}
+                        className="bg-surface border border-[#334155] rounded py-1.5 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
+                      >
+                        <option value="BENNE">BENNE</option>
+                        <option value="PLATEAU">PLATEAU</option>
+                        <option value="CITERNE">CITERNE</option>
+                        <option value="FRIGO">FRIGO</option>
+                        <option value="AUTRE">AUTRE</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Chauffeur (optionnel) */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="uppercase text-on-surface text-[10px]">
+                      Chauffeur assigné (optionnel)
+                    </label>
+                    <input
+                      type="text"
+                      value={newDriverName}
+                      onChange={(e) => setNewDriverName(e.target.value)}
+                      placeholder="Ex: Moussa Traoré"
+                      className="bg-[#020617] border border-[#334155] rounded py-1.5 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
+                    />
+                  </div>
+                </>
               ) : (
-                <div className="flex flex-col gap-1.5">
-                  <label className="uppercase text-on-surface">Type de Remorque</label>
-                  <select
-                    value={newTrailerType}
-                    onChange={(e) => setNewTrailerType(e.target.value as TrailerType)}
-                    className="bg-[#020617] border border-[#334155] rounded py-2 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
-                  >
-                    <option value="BENNE">BENNE</option>
-                    <option value="PLATEAU">PLATEAU</option>
-                    <option value="CITERNE">CITERNE</option>
-                    <option value="FRIGO">FRIGO</option>
-                    <option value="AUTRE">AUTRE</option>
-                  </select>
-                </div>
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="uppercase text-on-surface">Immatriculation (Plaque) *</label>
+                    <input
+                      type="text"
+                      value={newPlate}
+                      onChange={(e) => setNewPlate(e.target.value)}
+                      placeholder="Ex: 5895 CAT"
+                      required
+                      className="bg-[#020617] border border-[#334155] rounded py-2 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
+                    />
+                  </div>
+
+                  {vehicleKind === 'tractor' ? (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="uppercase text-on-surface">Marque / Modèle</label>
+                      <input
+                        type="text"
+                        value={newModel}
+                        onChange={(e) => setNewModel(e.target.value)}
+                        placeholder="Ex: RENAULT T-HIGH 520"
+                        className="bg-[#020617] border border-[#334155] rounded py-2 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="uppercase text-on-surface">Type de Remorque</label>
+                      <select
+                        value={newTrailerType}
+                        onChange={(e) => setNewTrailerType(e.target.value as TrailerType)}
+                        className="bg-[#020617] border border-[#334155] rounded py-2 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
+                      >
+                        <option value="BENNE">BENNE</option>
+                        <option value="PLATEAU">PLATEAU</option>
+                        <option value="CITERNE">CITERNE</option>
+                        <option value="FRIGO">FRIGO</option>
+                        <option value="AUTRE">AUTRE</option>
+                      </select>
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="flex justify-end gap-2 pt-3 border-t border-[#334155]">
                 <button
                   type="button"
-                  onClick={() => setIsAddVehicleOpen(false)}
-                  className="px-3 py-1.5 border border-[#334155] rounded hover:bg-surface-variant"
+                  disabled={isSubmittingVehicle}
+                  onClick={() => {
+                    setIsAddVehicleOpen(false);
+                    resetAddVehicleForm();
+                  }}
+                  className="px-3 py-1.5 border border-[#334155] rounded hover:bg-surface-variant disabled:opacity-50"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-[#ff8c00] hover:bg-[#ff8c00]/90 text-black font-semibold rounded"
+                  disabled={isSubmittingVehicle}
+                  className="px-4 py-1.5 bg-[#ff8c00] hover:bg-[#ff8c00]/90 text-black font-semibold rounded disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  Ajouter
+                  {isSubmittingVehicle ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Ajout en cours...</span>
+                    </>
+                  ) : vehicleKind === 'ensemble' ? (
+                    'Créer l’attelage'
+                  ) : (
+                    'Ajouter'
+                  )}
                 </button>
               </div>
             </form>
