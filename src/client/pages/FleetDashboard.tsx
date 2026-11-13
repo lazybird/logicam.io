@@ -614,7 +614,6 @@ export const FleetDashboard: React.FC = () => {
                   <th className="py-2.5 px-2.5 sm:px-3 uppercase text-on-surface-variant font-medium">REMORQUE</th>
                   {/* Colonnes masquées sur mobile (< md) car détaillées dans l'accordéon */}
                   <th className="hidden md:table-cell py-2.5 px-3 uppercase text-on-surface-variant font-medium">TYPE</th>
-                  <th className="py-2.5 px-2 sm:px-3 uppercase text-on-surface-variant font-medium">STATUT</th>
                   <th className="hidden md:table-cell py-2.5 px-3 uppercase text-on-surface-variant font-medium text-right">
                     KILOMÉTRAGE
                   </th>
@@ -623,7 +622,7 @@ export const FleetDashboard: React.FC = () => {
               <tbody className="divide-y divide-[#334155]/40 font-mono">
                 {filteredCouplings.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-on-surface-variant">
+                    <td colSpan={5} className="py-8 text-center text-on-surface-variant">
                       Aucun attelage ne correspond aux critères de recherche.
                     </td>
                   </tr>
@@ -736,41 +735,6 @@ export const FleetDashboard: React.FC = () => {
                             </span>
                           </td>
 
-                          {/* Statut (Badge propre, cliquable avec le reste de la ligne pour ouvrir l'accordéon) */}
-                          <td className="py-2 px-2 sm:px-3 whitespace-nowrap">
-                            {isBreakdown ? (
-                              <div className="inline-flex flex-col gap-0.5">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded bg-red-950/70 text-[#ffb4ab] border border-red-500/50 text-[10px] font-semibold">
-                                  <span>En Panne</span>
-                                </span>
-                                <span className="text-[9px] text-red-300/80 font-mono">
-                                  {row.tractorStatus === 'breakdown' && row.trailerStatus === 'breakdown'
-                                    ? 'Ensemble (2/2)'
-                                    : row.tractorStatus === 'breakdown'
-                                    ? 'Tracteur seul'
-                                    : 'Remorque seule'}
-                                </span>
-                              </div>
-                            ) : isMaintenance ? (
-                              <div className="inline-flex flex-col gap-0.5">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-950/70 text-amber-300 border border-amber-500/50 text-[10px] font-semibold">
-                                  <span>Maintenance</span>
-                                </span>
-                                <span className="text-[9px] text-amber-300/80 font-mono">
-                                  {row.tractorStatus === 'maintenance' && row.trailerStatus === 'maintenance'
-                                    ? 'Ensemble (2/2)'
-                                    : row.tractorStatus === 'maintenance'
-                                    ? 'Tracteur seul'
-                                    : 'Remorque seule'}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-950/50 text-[#4edea3] border border-emerald-500/40 text-[10px] font-medium">
-                                <span>En Service</span>
-                              </span>
-                            )}
-                          </td>
-
                           {/* Kilométrage (Desktop uniquement) */}
                           <td className="hidden md:table-cell py-2.5 px-3 text-right whitespace-nowrap">
                             <div>{(row.mileageKm ?? 0).toLocaleString()} km</div>
@@ -785,7 +749,7 @@ export const FleetDashboard: React.FC = () => {
                         {/* Accordéon Dépliable (Desktop & Mobile) — Détails de panne, infos complémentaires et actions */}
                         {isExpanded && (
                           <tr className="bg-[#020617]/95 border-y border-[#334155]">
-                            <td colSpan={6} className="p-3 sm:p-4">
+                            <td colSpan={5} className="p-3 sm:p-4">
                               <div className="flex flex-col gap-3 font-mono text-xs">
                                  {/* Section 1 : Détail du Diagnostic & Immobilisation en cours */}
                                 {(isBreakdown || isMaintenance) && (
@@ -1171,30 +1135,17 @@ export const FleetDashboard: React.FC = () => {
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            {/* Bouton de statut rapide */}
-                            {can('fleet:manage') && (
+                            {/* Bouton rapide d'attelage visible en ligne fermée si disponible */}
+                            {can('couplings:change') && t.status === 'in_service' && !isExpanded && (
                               <button
                                 type="button"
-                                onClick={() => openStandaloneStatusModal('tractor', t)}
-                                className="px-2 py-1 rounded bg-surface-container hover:bg-surface-variant border border-[#334155] hover:border-primary text-on-surface text-[10px] font-semibold transition-colors flex items-center gap-1"
-                              >
-                                <Wrench className="w-3 h-3 text-primary" />
-                                <span>Statut...</span>
-                              </button>
-                            )}
-
-                            {/* Bouton atteler */}
-                            {can('couplings:change') && (
-                              <button
-                                type="button"
-                                disabled={t.status !== 'in_service'}
                                 onClick={() => {
                                   setPreselectedTractorId(t.id);
                                   setPreselectedTrailerId(undefined);
                                   setIsCouplingModalOpen(true);
                                 }}
-                                className="px-2.5 py-1 rounded bg-[#ff8c00]/20 text-[#ffb77d] hover:bg-[#ff8c00]/30 border border-[#ff8c00]/40 text-[10px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                                title={t.status !== 'in_service' ? 'Véhicule immobilisé (panne ou maintenance)' : 'Atteler'}
+                                className="px-2.5 py-1 rounded bg-[#ff8c00]/20 text-[#ffb77d] hover:bg-[#ff8c00]/30 border border-[#ff8c00]/40 text-[10px] font-medium"
+                                title="Atteler ce tracteur"
                               >
                                 Atteler
                               </button>
@@ -1305,6 +1256,43 @@ export const FleetDashboard: React.FC = () => {
                                 </span>
                               </div>
                             </div>
+
+                            {/* Barre d'actions harmonisée et lisible dans l'accordéon */}
+                            <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-[#334155]/50 items-stretch sm:items-center justify-between">
+                              {/* Changer le statut du tracteur */}
+                              {can('fleet:manage') && (
+                                <button
+                                  type="button"
+                                  onClick={() => openStandaloneStatusModal('tractor', t)}
+                                  className="px-3 py-1.5 rounded bg-surface-container hover:bg-surface-variant border border-[#334155] hover:border-primary text-on-surface text-xs font-semibold transition-colors flex items-center justify-center gap-2 flex-1"
+                                >
+                                  <Wrench className="w-3.5 h-3.5 text-primary" />
+                                  <span>
+                                    {t.status === 'in_service'
+                                      ? 'Déclarer panne ou maintenance'
+                                      : 'Remettre en service / Modifier statut'}
+                                  </span>
+                                </button>
+                              )}
+
+                              {/* Atteler ce tracteur */}
+                              {can('couplings:change') && (
+                                <button
+                                  type="button"
+                                  disabled={t.status !== 'in_service'}
+                                  onClick={() => {
+                                    setPreselectedTractorId(t.id);
+                                    setPreselectedTrailerId(undefined);
+                                    setIsCouplingModalOpen(true);
+                                  }}
+                                  className="px-3 py-1.5 rounded bg-[#ff8c00] text-black hover:bg-[#ff8c00]/90 font-mono text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0 shadow-[0_0_10px_rgba(255,140,0,0.2)]"
+                                  title={t.status !== 'in_service' ? 'Tracteur immobilisé (panne ou maintenance)' : 'Atteler ce tracteur'}
+                                >
+                                  <Truck className="w-3.5 h-3.5" />
+                                  <span>Atteler ce tracteur</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1382,30 +1370,17 @@ export const FleetDashboard: React.FC = () => {
                           </div>
 
                           <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            {/* Bouton de statut rapide */}
-                            {can('fleet:manage') && (
+                            {/* Bouton rapide d'attelage visible en ligne fermée si disponible */}
+                            {can('couplings:change') && tr.status === 'in_service' && !isExpanded && (
                               <button
                                 type="button"
-                                onClick={() => openStandaloneStatusModal('trailer', tr)}
-                                className="px-2 py-1 rounded bg-surface-container hover:bg-surface-variant border border-[#334155] hover:border-primary text-on-surface text-[10px] font-semibold transition-colors flex items-center gap-1"
-                              >
-                                <Wrench className="w-3 h-3 text-primary" />
-                                <span>Statut...</span>
-                              </button>
-                            )}
-
-                            {/* Bouton atteler */}
-                            {can('couplings:change') && (
-                              <button
-                                type="button"
-                                disabled={tr.status !== 'in_service'}
                                 onClick={() => {
                                   setPreselectedTrailerId(tr.id);
                                   setPreselectedTractorId(undefined);
                                   setIsCouplingModalOpen(true);
                                 }}
-                                className="px-2.5 py-1 rounded bg-[#4edea3]/20 text-[#4edea3] hover:bg-[#4edea3]/30 border border-[#4edea3]/40 text-[10px] font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                                title={tr.status !== 'in_service' ? 'Remorque immobilisée (panne ou maintenance)' : 'Atteler'}
+                                className="px-2.5 py-1 rounded bg-[#4edea3]/20 text-[#4edea3] hover:bg-[#4edea3]/30 border border-[#4edea3]/40 text-[10px] font-medium"
+                                title="Atteler cette remorque"
                               >
                                 Atteler
                               </button>
@@ -1510,6 +1485,43 @@ export const FleetDashboard: React.FC = () => {
                                   {tr.status === 'in_service' ? 'Prête à être attelée' : tr.status === 'breakdown' ? 'Immobilisée pour panne' : 'Immobilisée en atelier'}
                                 </span>
                               </div>
+                            </div>
+
+                            {/* Barre d'actions harmonisée et lisible dans l'accordéon */}
+                            <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-[#334155]/50 items-stretch sm:items-center justify-between">
+                              {/* Changer le statut de la remorque */}
+                              {can('fleet:manage') && (
+                                <button
+                                  type="button"
+                                  onClick={() => openStandaloneStatusModal('trailer', tr)}
+                                  className="px-3 py-1.5 rounded bg-surface-container hover:bg-surface-variant border border-[#334155] hover:border-primary text-on-surface text-xs font-semibold transition-colors flex items-center justify-center gap-2 flex-1"
+                                >
+                                  <Wrench className="w-3.5 h-3.5 text-primary" />
+                                  <span>
+                                    {tr.status === 'in_service'
+                                      ? 'Déclarer panne ou maintenance'
+                                      : 'Remettre en service / Modifier statut'}
+                                  </span>
+                                </button>
+                              )}
+
+                              {/* Atteler cette remorque */}
+                              {can('couplings:change') && (
+                                <button
+                                  type="button"
+                                  disabled={tr.status !== 'in_service'}
+                                  onClick={() => {
+                                    setPreselectedTrailerId(tr.id);
+                                    setPreselectedTractorId(undefined);
+                                    setIsCouplingModalOpen(true);
+                                  }}
+                                  className="px-3 py-1.5 rounded bg-[#4edea3] text-black hover:bg-[#4edea3]/90 font-mono text-xs font-semibold flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0 shadow-[0_0_10px_rgba(78,222,163,0.2)]"
+                                  title={tr.status !== 'in_service' ? 'Remorque immobilisée (panne ou maintenance)' : 'Atteler cette remorque'}
+                                >
+                                  <Truck className="w-3.5 h-3.5" />
+                                  <span>Atteler cette remorque</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         )}
