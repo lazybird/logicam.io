@@ -267,7 +267,7 @@ export const couplingsRelations = relations(couplings, ({ one }) => ({
 }));
 
 // -------------------------------------------------------------
-// CATÉGORIES DE PANNES (BREAKDOWN CATEGORIES)
+// CATÉGORIES DE PANNES & SUJETS DE MAINTENANCE (INCIDENT CATEGORIES)
 // -------------------------------------------------------------
 export const breakdownCategories = pgTable('breakdown_categories', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -277,6 +277,8 @@ export const breakdownCategories = pgTable('breakdown_categories', {
   name: text('name').notNull(),
   code: text('code').notNull(),
   severity: text('severity').notNull().default('high'),
+  categoryType: text('category_type').notNull().default('breakdown'), // 'breakdown' | 'maintenance'
+  description: text('description'),
 });
 
 export const breakdownCategoriesRelations = relations(breakdownCategories, ({ one, many }) => ({

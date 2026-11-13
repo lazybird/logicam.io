@@ -16,6 +16,7 @@ import {
 } from './schema.js';
 import { hashPin, normalizePhone } from '../auth/pin.js';
 import type { VehicleStatus, TrailerType } from '../../shared/types.js';
+import { DEFAULT_INCIDENT_CATALOG } from '../../shared/incident-catalog.js';
 
 export async function ensureSeedData(): Promise<void> {
   // S'assurer que le schéma de tables existe
@@ -186,27 +187,21 @@ export async function ensureSeedData(): Promise<void> {
     status: 'active',
   });
 
-  // 5. Catégories de pannes & Garages fictifs
-  const defaultCategories = [
-    { name: 'Moteur / Transmission', code: 'ENGINE', severity: 'high' },
-    { name: 'Système de Freinage', code: 'BRAKES', severity: 'critical' },
-    { name: 'Pneumatiques', code: 'TIRES', severity: 'medium' },
-    { name: 'Électrique / Électronique', code: 'ELECTRICAL', severity: 'medium' },
-    { name: 'Carrosserie / Structure', code: 'BODY', severity: 'low' },
-  ];
-
+  // 5. Catégories de pannes & Sujets de maintenance par défaut (Référentiel complet)
   const defaultGarages = [
     { name: 'Atelier Mock Bel-Air', location: 'Zone Industrielle Bel-Air, Dakar', contactPhone: '+221338111111' },
     { name: 'Garage Test Diamniadio', location: 'Pôle Urbain Diamniadio', contactPhone: '+221338222222' },
   ];
 
   for (const org of [sahelTrans, dakarLogistics]) {
-    for (const cat of defaultCategories) {
+    for (const cat of DEFAULT_INCIDENT_CATALOG) {
       await db.insert(breakdownCategories).values({
         organizationId: org.id,
         name: cat.name,
         code: cat.code,
         severity: cat.severity,
+        categoryType: cat.categoryType,
+        description: cat.description,
       });
     }
 

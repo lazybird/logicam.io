@@ -17,6 +17,7 @@ interface StatusChangeModalProps {
   categories: BreakdownCategoryDTO[];
   garages: GarageDTO[];
   onSuccess: () => void;
+  onCategoryCreated?: (newCategory: BreakdownCategoryDTO) => void;
 }
 
 export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
@@ -25,19 +26,23 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
   target,
   initialScope = 'both',
   initialAction = 'in_service',
-  categories,
+  categories: initialCategories,
   garages,
   onSuccess,
+  onCategoryCreated,
 }) => {
   const [selectedAction, setSelectedAction] = useState<VehicleStatus>(initialAction);
   const [targetScope, setTargetScope] = useState<BreakdownTargetScope>(initialScope);
 
-  // Panne
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  // Catégories locales enrichissables à la volée
+  const [localCategories, setLocalCategories] = useState<BreakdownCategoryDTO[]>(initialCategories);
 
-  // Maintenance
+  // Panne : Support multi-pannes
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+
+  // Maintenance : Support multi-sujets de maintenance harmonisés
+  const [selectedMaintenanceSubjectIds, setSelectedMaintenanceSubjectIds] = useState<string[]>([]);
   const [selectedGarageId, setSelectedGarageId] = useState<string>('');
-  const [maintenanceType, setMaintenanceType] = useState<'vidange' | 'revision' | 'pneus' | 'autre'>('vidange');
 
   // Commun
   const [notes, setNotes] = useState('');
@@ -48,12 +53,16 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
   useEscapeKey(isOpen, onClose);
 
   React.useEffect(() => {
+    setLocalCategories(initialCategories);
+  }, [initialCategories]);
+
+  React.useEffect(() => {
     if (isOpen) {
       setSelectedAction(initialAction);
       setTargetScope(initialScope);
-      setSelectedCategoryId('');
+      setSelectedCategoryIds([]);
+      setSelectedMaintenanceSubjectIds([]);
       setSelectedGarageId('');
-      setMaintenanceType('vidange');
       setNotes('');
       setUncoupleImmediately(false);
       setError(null);
@@ -63,6 +72,47 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
   if (!isOpen || !target) return null;
 
   const isCoupling = target.kind === 'coupling';
+
+  // Séparation des catégories de pannes et sujets de maintenance
+  const breakdownCategoryOptions = localCategories.filter(
+    (c) => !c.categoryType || c.categoryType === 'breakdown'
+  );
+
+  const maintenanceSubjectOptions = localCategories.filter(
+    (c) => c.categoryType === 'maintenance'
+  );
+
+  // Création rapide à la volée d'une panne
+  const handleCreateBreakdownCategory = async (name: string): Promise<string | void> => {
+    try {
+      const created = await api.post<BreakdownCategoryDTO>('/api/admin/categories', {
+        name,
+        categoryType: 'breakdown',
+        severity: 'high',
+      });
+      setLocalCategories((prev) => [...prev, created]);
+      if (onCategoryCreated) onCategoryCreated(created);
+      return created.id;
+    } catch (err: any) {
+      setError(err?.message || 'Erreur lors de la création de la catégorie de panne');
+    }
+  };
+
+  // Création rapide à la volée d'un sujet de maintenance
+  const handleCreateMaintenanceSubject = async (name: string): Promise<string | void> => {
+    try {
+      const created = await api.post<BreakdownCategoryDTO>('/api/admin/categories', {
+        name,
+        categoryType: 'maintenance',
+        severity: 'medium',
+      });
+      setLocalCategories((prev) => [...prev, created]);
+      if (onCategoryCreated) onCategoryCreated(created);
+      return created.id;
+    } catch (err: any) {
+      setError(err?.message || 'Erreur lors de la création du sujet de maintenance');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,60 +139,58 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
           await api.patch(endpoint, { status: 'in_service' });
         }
       } else if (selectedAction === 'breakdown') {
-        // Déclaration de panne
+        // Déclaration de panne (multi-pannes supporté)
+        const payload: any = {
+          type: 'breakdown',
+          categoryIds: selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
+          categoryId: selectedCategoryIds[0] || null,
+          notes: notes.trim() || null,
+        };
+
         if (isCoupling) {
-          await api.post('/api/fleet/incidents', {
-            type: 'breakdown',
-            tractorId: targetScope === 'tractor' || targetScope === 'both' ? target.tractorId : null,
-            trailerId: targetScope === 'trailer' || targetScope === 'both' ? target.trailerId : null,
-            couplingId: target.id,
-            categoryId: selectedCategoryId || null,
-            notes: notes.trim() || null,
-            uncoupleImmediately,
-          });
+          payload.tractorId = targetScope === 'tractor' || targetScope === 'both' ? target.tractorId : null;
+          payload.trailerId = targetScope === 'trailer' || targetScope === 'both' ? target.trailerId : null;
+          payload.couplingId = target.id;
+          payload.uncoupleImmediately = uncoupleImmediately;
         } else {
-          await api.post('/api/fleet/incidents', {
-            type: 'breakdown',
-            tractorId: target.vehicleType === 'tractor' ? target.id : null,
-            trailerId: target.vehicleType === 'trailer' ? target.id : null,
-            categoryId: selectedCategoryId || null,
-            notes: notes.trim() || null,
-          });
+          payload.tractorId = target.vehicleType === 'tractor' ? target.id : null;
+          payload.trailerId = target.vehicleType === 'trailer' ? target.id : null;
         }
+
+        await api.post('/api/fleet/incidents', payload);
       } else if (selectedAction === 'maintenance') {
-        // Déclaration de maintenance
-        const typeLabel =
-          maintenanceType === 'vidange'
-            ? 'Vidange moteur'
-            : maintenanceType === 'revision'
-            ? 'Révision périodique'
-            : maintenanceType === 'pneus'
-            ? 'Changement / permutation pneumatiques'
-            : 'Maintenance générale';
+        // Déclaration de maintenance (multi-sujets de maintenance supporté)
+        const selectedSubjectNames = maintenanceSubjectOptions
+          .filter((s) => selectedMaintenanceSubjectIds.includes(s.id))
+          .map((s) => s.name);
+
+        const topicsHeader = selectedSubjectNames.length > 0
+          ? `[${selectedSubjectNames.join(', ')}]`
+          : '[Maintenance générale]';
 
         const combinedNotes = notes.trim()
-          ? `[${typeLabel}] ${notes.trim()}`
-          : `[${typeLabel}]`;
+          ? `${topicsHeader} ${notes.trim()}`
+          : topicsHeader;
+
+        const payload: any = {
+          type: 'maintenance',
+          categoryIds: selectedMaintenanceSubjectIds.length > 0 ? selectedMaintenanceSubjectIds : undefined,
+          categoryId: selectedMaintenanceSubjectIds[0] || null,
+          garageId: selectedGarageId || null,
+          notes: combinedNotes,
+        };
 
         if (isCoupling) {
-          await api.post('/api/fleet/incidents', {
-            type: 'maintenance',
-            tractorId: targetScope === 'tractor' || targetScope === 'both' ? target.tractorId : null,
-            trailerId: targetScope === 'trailer' || targetScope === 'both' ? target.trailerId : null,
-            couplingId: target.id,
-            garageId: selectedGarageId || null,
-            notes: combinedNotes,
-            uncoupleImmediately,
-          });
+          payload.tractorId = targetScope === 'tractor' || targetScope === 'both' ? target.tractorId : null;
+          payload.trailerId = targetScope === 'trailer' || targetScope === 'both' ? target.trailerId : null;
+          payload.couplingId = target.id;
+          payload.uncoupleImmediately = uncoupleImmediately;
         } else {
-          await api.post('/api/fleet/incidents', {
-            type: 'maintenance',
-            tractorId: target.vehicleType === 'tractor' ? target.id : null,
-            trailerId: target.vehicleType === 'trailer' ? target.id : null,
-            garageId: selectedGarageId || null,
-            notes: combinedNotes,
-          });
+          payload.tractorId = target.vehicleType === 'tractor' ? target.id : null;
+          payload.trailerId = target.vehicleType === 'trailer' ? target.id : null;
         }
+
+        await api.post('/api/fleet/incidents', payload);
       }
 
       onSuccess();
@@ -166,7 +214,7 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
         <div className="p-4 bg-surface-container border-b border-[#334155] flex justify-between items-center">
           <div>
             <h2 className="font-mono text-sm font-bold text-on-surface">
-              Changer le statut
+              Changer le statut & déclarer une intervention
             </h2>
             <p className="font-mono text-xs text-[#ffb77d]">
               {isCoupling
@@ -298,49 +346,55 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
             </div>
           )}
 
-          {/* 3. Détails spécifiques si Panne */}
+          {/* 3. Détails spécifiques si Panne (Multi-pannes + Création à la volée) */}
           {selectedAction === 'breakdown' && (
             <div className="flex flex-col gap-3 pt-1 border-t border-[#334155]/60">
-              {categories.length > 0 && (
-                <SearchableSelect
-                  label="Type d'anomalie / Catégorie"
-                  placeholder="Sélectionner une catégorie..."
-                  emptyMessage="Aucune catégorie correspondante"
-                  options={categories.map((cat) => {
-                    const severityUpper = (cat.severity || 'medium').toUpperCase();
-                    const badgeColor =
-                      severityUpper === 'CRITICAL' || severityUpper === 'HIGH'
-                        ? 'amber'
-                        : severityUpper === 'LOW'
-                        ? 'emerald'
-                        : 'blue';
+              <SearchableSelect
+                label="Anomalies / Pannes constatées (sélection multiple)"
+                placeholder="Sélectionner une ou plusieurs pannes..."
+                emptyMessage="Aucune anomalie correspondante"
+                multiple
+                values={selectedCategoryIds}
+                onMultiChange={(vals) => setSelectedCategoryIds(vals)}
+                value=""
+                onChange={() => {}}
+                allowCreate
+                createLabel="Ajouter cette nouvelle panne au catalogue"
+                onCreateNew={handleCreateBreakdownCategory}
+                options={breakdownCategoryOptions.map((cat) => {
+                  const severityUpper = (cat.severity || 'medium').toUpperCase();
+                  const badgeColor =
+                    severityUpper === 'CRITICAL'
+                      ? 'red'
+                      : severityUpper === 'HIGH'
+                      ? 'amber'
+                      : severityUpper === 'LOW'
+                      ? 'emerald'
+                      : 'blue';
 
-                    return {
-                      id: cat.id,
-                      label: cat.name,
-                      badge: severityUpper,
-                      badgeColor,
-                      subLabel: `Code: ${cat.code}`,
-                    };
-                  })}
-                  value={selectedCategoryId}
-                  onChange={(val) => setSelectedCategoryId(val)}
-                />
-              )}
+                  return {
+                    id: cat.id,
+                    label: cat.name,
+                    badge: severityUpper,
+                    badgeColor,
+                    subLabel: cat.description || `Code: ${cat.code}`,
+                  };
+                })}
+              />
 
               <div className="flex flex-col gap-1.5">
                 <label
                   htmlFor="status-modal-notes"
                   className="block text-on-surface-variant font-medium uppercase text-[11px] tracking-wider"
                 >
-                  Précisions sur la panne (optionnel)
+                  Précisions / Circonstances (optionnel)
                 </label>
                 <textarea
                   id="status-modal-notes"
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Ex: Pneu crevé, fuite d'air comprimé, voyant moteur..."
+                  placeholder="Ex: Pneu crevé essieu 2 droit + voyant ABS allumé, véhicule immobilisé au dépôt..."
                   className="w-full bg-[#020617] border border-[#334155] rounded-lg p-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-red-500 transition-colors resize-none"
                 />
               </div>
@@ -367,42 +421,34 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
             </div>
           )}
 
-          {/* 4. Détails spécifiques si Maintenance */}
+          {/* 4. Détails spécifiques si Maintenance (Multi-sujets harmonisés + Création à la volée + Garage) */}
           {selectedAction === 'maintenance' && (
             <div className="flex flex-col gap-3 pt-1 border-t border-[#334155]/60">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-on-surface-variant font-medium uppercase text-[11px] tracking-wider">
-                  Type d'intervention *
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {(
-                    [
-                      { id: 'vidange', label: 'Vidange' },
-                      { id: 'revision', label: 'Révision' },
-                      { id: 'pneus', label: 'Pneus' },
-                      { id: 'autre', label: 'Autre' },
-                    ] as const
-                  ).map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setMaintenanceType(item.id)}
-                      className={`p-2 rounded-lg border text-xs text-center transition-all ${
-                        maintenanceType === item.id
-                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 ring-1 ring-amber-500 font-semibold'
-                          : 'bg-surface-container border-[#334155] text-on-surface-variant hover:border-amber-400/40'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <SearchableSelect
+                label="Sujets / Opérations de maintenance (sélection multiple)"
+                placeholder="Sélectionner les opérations à réaliser..."
+                emptyMessage="Aucun sujet de maintenance correspondant"
+                multiple
+                values={selectedMaintenanceSubjectIds}
+                onMultiChange={(vals) => setSelectedMaintenanceSubjectIds(vals)}
+                value=""
+                onChange={() => {}}
+                allowCreate
+                createLabel="Ajouter ce nouveau sujet de maintenance"
+                onCreateNew={handleCreateMaintenanceSubject}
+                options={maintenanceSubjectOptions.map((s) => ({
+                  id: s.id,
+                  label: s.name,
+                  subLabel: s.description || `Code: ${s.code}`,
+                  badge: (s.severity || 'medium').toUpperCase(),
+                  badgeColor: s.severity === 'critical' ? 'red' : s.severity === 'high' ? 'amber' : 'blue',
+                }))}
+              />
 
               {garages.length > 0 && (
                 <SearchableSelect
-                  label="Garage / Prestataire (optionnel)"
-                  placeholder="Sélectionner un garage..."
+                  label="Garage / Prestataire assigné (optionnel)"
+                  placeholder="Sélectionner un atelier partenaire..."
                   emptyMessage="Aucun garage trouvé"
                   options={garages.map((g) => ({
                     id: g.id,
@@ -419,14 +465,14 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
                   htmlFor="maintenance-modal-notes"
                   className="block text-on-surface-variant font-medium uppercase text-[11px] tracking-wider"
                 >
-                  Notes ou consignes
+                  Consignes / Travaux supplémentaires
                 </label>
                 <textarea
                   id="maintenance-modal-notes"
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Ex: Remplacement filtre à huile + contrôle freins..."
+                  placeholder="Ex: Remplacement filtre gasoil + contrôle pression pneumatiques..."
                   className="w-full bg-[#020617] border border-[#334155] rounded-lg p-2.5 text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-amber-500 transition-colors resize-none"
                 />
               </div>
@@ -498,12 +544,16 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
               ) : selectedAction === 'breakdown' ? (
                 <>
                   <AlertTriangle className="w-4 h-4" />
-                  <span>Confirmer la panne</span>
+                  <span>
+                    Confirmer {selectedCategoryIds.length > 1 ? `${selectedCategoryIds.length} pannes` : 'la panne'}
+                  </span>
                 </>
               ) : selectedAction === 'maintenance' ? (
                 <>
                   <Wrench className="w-4 h-4" />
-                  <span>Confirmer la maintenance</span>
+                  <span>
+                    Confirmer {selectedMaintenanceSubjectIds.length > 1 ? `${selectedMaintenanceSubjectIds.length} sujets` : 'la maintenance'}
+                  </span>
                 </>
               ) : (
                 <>

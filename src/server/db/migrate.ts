@@ -134,15 +134,19 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
-    // 10. BREAKDOWN CATEGORIES
+    // 10. BREAKDOWN CATEGORIES & MAINTENANCE TOPICS
     await client.query(`
       CREATE TABLE IF NOT EXISTS breakdown_categories (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
         name TEXT NOT NULL,
         code TEXT NOT NULL,
-        severity TEXT NOT NULL DEFAULT 'high'
+        severity TEXT NOT NULL DEFAULT 'high',
+        category_type TEXT NOT NULL DEFAULT 'breakdown',
+        description TEXT
       );
+      ALTER TABLE breakdown_categories ADD COLUMN IF NOT EXISTS category_type TEXT NOT NULL DEFAULT 'breakdown';
+      ALTER TABLE breakdown_categories ADD COLUMN IF NOT EXISTS description TEXT;
     `);
 
     // 11. GARAGES

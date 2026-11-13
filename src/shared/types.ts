@@ -117,6 +117,8 @@ export interface BreakdownCategoryDTO {
   name: string;
   code: string;
   severity: string;
+  categoryType?: 'breakdown' | 'maintenance';
+  description?: string | null;
 }
 
 export interface IncidentDTO {

@@ -15,6 +15,7 @@ import {
   requireCapability,
   type AuthContextVariables,
 } from '../auth/middleware.js';
+import { hasCapability } from '../../shared/permissions.js';
 import type { Capability, TeamDTO, UserRole } from '../../shared/types.js';
 
 export const adminRouter = new Hono<{ Variables: AuthContextVariables }>();
@@ -343,23 +344,55 @@ adminRouter.put('/teams/:id/policy', requireCapability('members:manage'), async 
 });
 
 /**
- * Création d'une catégorie de panne
+ * Création d'une catégorie de panne ou sujet de maintenance
+ * Accessible aux gestionnaires via 'settings:manage' OU 'incidents:create' (création rapide à la volée)
  */
-adminRouter.post('/categories', requireCapability('settings:manage'), async (c) => {
+adminRouter.post('/categories', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'Non authentifié' }, 401);
+  }
+
+  const hasPermission =
+    user.role === 'SUPER_ADMIN' ||
+    user.role === 'ORG_ADMIN' ||
+    hasCapability(user.role, user.capabilities, 'settings:manage') ||
+    hasCapability(user.role, user.capabilities, 'incidents:create');
+
+  if (!hasPermission) {
+    return c.json({ error: 'Permission refusée (incidents:create ou settings:manage requis)' }, 403);
+  }
+
   const effectiveOrgId = c.get('effectiveOrgId');
   const body = await c.req.json().catch(() => null);
 
-  if (!body || !body.name || !body.code) {
-    return c.json({ error: 'Nom et code de catégorie requis' }, 400);
+  if (!body || !body.name) {
+    return c.json({ error: 'Nom de la catégorie ou du sujet requis' }, 400);
   }
+
+  const name = String(body.name).trim();
+  const rawCode = body.code
+    ? String(body.code).trim().toUpperCase()
+    : name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '_')
+        .slice(0, 30);
+
+  const categoryType = body.categoryType === 'maintenance' ? 'maintenance' : 'breakdown';
+  const severity = body.severity || (categoryType === 'maintenance' ? 'medium' : 'high');
+  const description = body.description ? String(body.description).trim() : null;
 
   const [inserted] = await db
     .insert(breakdownCategories)
     .values({
       organizationId: effectiveOrgId,
-      name: String(body.name).trim(),
-      code: String(body.code).trim().toUpperCase(),
-      severity: body.severity || 'medium',
+      name,
+      code: rawCode,
+      severity,
+      categoryType,
+      description,
     })
     .returning();
 

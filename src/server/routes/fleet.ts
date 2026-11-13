@@ -202,6 +202,8 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
     name: c.name,
     code: c.code,
     severity: c.severity,
+    categoryType: (c.categoryType as 'breakdown' | 'maintenance') || 'breakdown',
+    description: c.description || null,
   }));
 
   const garagesDTO: GarageDTO[] = allGarages.map((g) => ({
@@ -603,6 +605,7 @@ fleetRouter.post('/incidents', requireCapability('incidents:create'), async (c) 
     trailerId,
     couplingId,
     categoryId,
+    categoryIds, // Tableau d'IDs si sélection multiple
     garageId,
     notes,
     uncoupleImmediately,
@@ -638,24 +641,38 @@ fleetRouter.post('/incidents', requireCapability('incidents:create'), async (c) 
       .where(and(eq(couplings.id, couplingId), eq(couplings.organizationId, effectiveOrgId)));
   }
 
-  // 4. Insérer l'incident
-  const [newIncident] = await db
-    .insert(incidents)
-    .values({
-      organizationId: effectiveOrgId,
-      type,
-      tractorId: tractorId || null,
-      trailerId: trailerId || null,
-      couplingId: couplingId || null,
-      categoryId: categoryId || null,
-      garageId: garageId || null,
-      reportedById: user.id,
-      notes: notes ? String(notes).trim() : null,
-      status: 'open',
-    })
-    .returning();
+  // 4. Déterminer la liste des catégories à insérer (support unitaire ou multi-anomalies)
+  const resolvedCategoryIds: (string | null)[] = Array.isArray(categoryIds) && categoryIds.length > 0
+    ? categoryIds
+    : categoryId
+    ? [categoryId]
+    : [null];
 
-  return c.json({ success: true, incident: newIncident }, 201);
+  const createdIncidents = [];
+  for (const catId of resolvedCategoryIds) {
+    const [newIncident] = await db
+      .insert(incidents)
+      .values({
+        organizationId: effectiveOrgId,
+        type,
+        tractorId: tractorId || null,
+        trailerId: trailerId || null,
+        couplingId: couplingId || null,
+        categoryId: catId,
+        garageId: garageId || null,
+        reportedById: user.id,
+        notes: notes ? String(notes).trim() : null,
+        status: 'open',
+      })
+      .returning();
+    createdIncidents.push(newIncident);
+  }
+
+  return c.json({
+    success: true,
+    incident: createdIncidents[0],
+    incidents: createdIncidents,
+  }, 201);
 });
 
 /**

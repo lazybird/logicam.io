@@ -13,6 +13,7 @@ import {
   breakdownCategories,
   garages,
 } from '../db/schema.js';
+import { DEFAULT_INCIDENT_CATALOG } from '../../shared/incident-catalog.js';
 import { hashPin, normalizePhone } from '../auth/pin.js';
 import {
   authMiddleware,
@@ -210,21 +211,15 @@ organizationsRouter.post('/', async (c) => {
     }
   }
 
-  // 3. Catégories de pannes & Garages par défaut
-  const defaultCategories = [
-    { name: 'Moteur / Transmission', code: 'ENGINE', severity: 'high' },
-    { name: 'Système de Freinage', code: 'BRAKES', severity: 'critical' },
-    { name: 'Pneumatiques', code: 'TIRES', severity: 'medium' },
-    { name: 'Électrique / Électronique', code: 'ELECTRICAL', severity: 'medium' },
-    { name: 'Carrosserie / Structure', code: 'BODY', severity: 'low' },
-  ];
-
-  for (const cat of defaultCategories) {
+  // 3. Catégories de pannes & Sujets de maintenance par défaut (Référentiel complet)
+  for (const item of DEFAULT_INCIDENT_CATALOG) {
     await db.insert(breakdownCategories).values({
       organizationId: newOrg.id,
-      name: cat.name,
-      code: cat.code,
-      severity: cat.severity,
+      name: item.name,
+      code: item.code,
+      severity: item.severity,
+      categoryType: item.categoryType,
+      description: item.description,
     });
   }
 

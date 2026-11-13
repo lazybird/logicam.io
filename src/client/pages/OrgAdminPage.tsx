@@ -122,10 +122,13 @@ export const OrgAdminPage: React.FC = () => {
   useEscapeKey(Boolean(deleteConfirmation), () => setDeleteConfirmation(null));
   useEscapeKey(Boolean(resetPinMember), () => setResetPinMember(null));
 
-  // Ajout Catégorie
+  // Ajout Catégorie / Sujet
   const [newCatName, setNewCatName] = useState('');
   const [newCatCode, setNewCatCode] = useState('');
   const [newCatSeverity, setNewCatSeverity] = useState('medium');
+  const [newCatType, setNewCatType] = useState<'breakdown' | 'maintenance'>('breakdown');
+  const [newCatDescription, setNewCatDescription] = useState('');
+  const [categoryFilterType, setCategoryFilterType] = useState<'all' | 'breakdown' | 'maintenance'>('all');
 
   // Ajout Garage
   const [newGarName, setNewGarName] = useState('');
@@ -279,20 +282,23 @@ export const OrgAdminPage: React.FC = () => {
     }
   };
 
-  // Catégories
+  // Catégories de pannes & Sujets de maintenance
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCatName.trim() || !newCatCode.trim()) return;
+    if (!newCatName.trim()) return;
 
     try {
       await api.post('/api/admin/categories', {
         name: newCatName.trim(),
-        code: newCatCode.trim().toUpperCase(),
+        code: newCatCode.trim() || undefined,
         severity: newCatSeverity,
+        categoryType: newCatType,
+        description: newCatDescription.trim() || undefined,
       });
 
       setNewCatName('');
       setNewCatCode('');
+      setNewCatDescription('');
       loadData();
     } catch (err: any) {
       alert(err?.message || 'Erreur');
@@ -429,7 +435,7 @@ export const OrgAdminPage: React.FC = () => {
           }`}
         >
           <AlertTriangle className="w-4 h-4" />
-          <span>Catégories de Pannes ({data?.breakdownCategories.length ?? 0})</span>
+          <span>Pannes & Sujets Maintenance ({data?.breakdownCategories.length ?? 0})</span>
         </button>
 
         <button
@@ -697,7 +703,7 @@ export const OrgAdminPage: React.FC = () => {
         </div>
       )}
 
-      {/* Onglet 3 : Catégories de Pannes */}
+      {/* Onglet 3 : Référentiel Pannes & Sujets de Maintenance */}
       {activeTab === 'categories' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Formulaire ajout rapide */}
@@ -705,101 +711,207 @@ export const OrgAdminPage: React.FC = () => {
             <div className="bg-surface-container border border-[#334155] rounded p-4 flex flex-col gap-4 font-mono text-xs">
               <h3 className="font-bold uppercase text-on-surface flex items-center gap-2">
                 <Plus className="w-4 h-4 text-primary" />
-                <span>Nouvelle Catégorie</span>
+                <span>Nouveau Sujet / Panne</span>
               </h3>
 
               <form onSubmit={handleCreateCategory} className="flex flex-col gap-3">
                 <div>
-                  <label className="text-on-surface-variant block mb-1">Nom</label>
+                  <label className="text-on-surface-variant block mb-1">Type d'élément *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewCatType('breakdown')}
+                      className={`py-1.5 px-2 rounded border text-center font-medium transition-all ${
+                        newCatType === 'breakdown'
+                          ? 'bg-red-500/20 border-red-500 text-red-300 font-bold'
+                          : 'bg-[#020617] border-[#334155] text-on-surface-variant hover:border-red-400/40'
+                      }`}
+                    >
+                      Panne / Anomalie
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewCatType('maintenance')}
+                      className={`py-1.5 px-2 rounded border text-center font-medium transition-all ${
+                        newCatType === 'maintenance'
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold'
+                          : 'bg-[#020617] border-[#334155] text-on-surface-variant hover:border-amber-400/40'
+                      }`}
+                    >
+                      Maintenance
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-on-surface-variant block mb-1">Désignation / Intitulé *</label>
                   <input
                     type="text"
                     value={newCatName}
                     onChange={(e) => setNewCatName(e.target.value)}
-                    placeholder="Ex: Système Hydraulique"
+                    placeholder={newCatType === 'breakdown' ? 'Ex: Fuite circuit refroidissement' : 'Ex: Graissage sellette & pivots'}
                     required
-                    className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none"
+                    className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none focus:border-[#ff8c00]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-on-surface-variant block mb-1">Code</label>
+                  <label className="text-on-surface-variant block mb-1">Code abrégé (optionnel)</label>
                   <input
                     type="text"
                     value={newCatCode}
                     onChange={(e) => setNewCatCode(e.target.value)}
-                    placeholder="Ex: HYDRAULIC"
-                    required
-                    className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none"
+                    placeholder="Auto-généré si vide (ex: COOLING)"
+                    className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none focus:border-[#ff8c00]"
                   />
                 </div>
 
                 <div>
-                  <label className="text-on-surface-variant block mb-1">Sévérité</label>
+                  <label className="text-on-surface-variant block mb-1">Priorité / Sévérité</label>
                   <select
                     value={newCatSeverity}
                     onChange={(e) => setNewCatSeverity(e.target.value)}
                     className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none"
                   >
-                    <option value="low">Faible</option>
-                    <option value="medium">Moyenne</option>
-                    <option value="high">Élevée</option>
-                    <option value="critical">Critique</option>
+                    <option value="low">Faible (Organe non critique)</option>
+                    <option value="medium">Moyenne (Standard)</option>
+                    <option value="high">Élevée (Important)</option>
+                    <option value="critical">Critique (Immobilisation immédiate)</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="text-on-surface-variant block mb-1">Description / Précisions</label>
+                  <textarea
+                    rows={2}
+                    value={newCatDescription}
+                    onChange={(e) => setNewCatDescription(e.target.value)}
+                    placeholder="Ex: Contrôle et remise à niveau selon préconisations..."
+                    className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none resize-none"
+                  />
                 </div>
 
                 <button
                   type="submit"
-                  className="mt-2 py-2 bg-[#ff8c00] hover:bg-[#ff8c00]/90 text-black font-semibold rounded"
+                  className="mt-2 py-2 bg-[#ff8c00] hover:bg-[#ff8c00]/90 text-black font-semibold rounded transition-colors"
                 >
-                  Ajouter la catégorie
+                  Ajouter au catalogue
                 </button>
               </form>
             </div>
           )}
 
-          {/* Liste des catégories */}
-          <div className="lg:col-span-2 bg-surface border border-[#334155] rounded overflow-hidden">
+          {/* Liste des catégories filtrable */}
+          <div className="lg:col-span-2 bg-surface border border-[#334155] rounded overflow-hidden flex flex-col">
+            {/* Barre de filtre type */}
+            <div className="p-3 bg-surface-container border-b border-[#334155] flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-on-surface-variant font-mono text-xs">
+                Afficher :
+              </span>
+              <div className="flex gap-1.5 font-mono text-xs">
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilterType('all')}
+                  className={`px-2.5 py-1 rounded transition-colors ${
+                    categoryFilterType === 'all'
+                      ? 'bg-primary text-black font-semibold'
+                      : 'bg-surface-container-high border border-[#334155] text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  Tous ({data?.breakdownCategories.length ?? 0})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilterType('breakdown')}
+                  className={`px-2.5 py-1 rounded transition-colors ${
+                    categoryFilterType === 'breakdown'
+                      ? 'bg-red-500 text-white font-semibold'
+                      : 'bg-surface-container-high border border-[#334155] text-on-surface-variant hover:text-red-300'
+                  }`}
+                >
+                  Pannes ({(data?.breakdownCategories || []).filter((c) => !c.categoryType || c.categoryType === 'breakdown').length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCategoryFilterType('maintenance')}
+                  className={`px-2.5 py-1 rounded transition-colors ${
+                    categoryFilterType === 'maintenance'
+                      ? 'bg-amber-500 text-black font-semibold'
+                      : 'bg-surface-container-high border border-[#334155] text-on-surface-variant hover:text-amber-300'
+                  }`}
+                >
+                  Maintenance ({(data?.breakdownCategories || []).filter((c) => c.categoryType === 'maintenance').length})
+                </button>
+              </div>
+            </div>
+
             <table className="w-full text-left border-collapse font-mono text-xs">
               <thead>
                 <tr className="bg-surface-container-low border-b border-[#334155]">
-                  <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">NOM</th>
+                  <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">TYPE</th>
+                  <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">DÉSIGNATION</th>
                   <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">CODE</th>
                   <th className="py-2.5 px-3 uppercase text-on-surface-variant font-medium">SÉVÉRITÉ</th>
                   <th className="py-2.5 px-3 text-right"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#334155]/40">
-                {(data?.breakdownCategories || []).map((cat) => {
-                  const severityInfo = SEVERITY_CONFIG[cat.severity] || {
-                    label: cat.severity,
-                    badgeClass: 'bg-surface-container border-[#334155] text-on-surface-variant',
-                  };
-                  return (
-                    <tr key={cat.id} className="hover:bg-surface-variant/30">
-                      <td className="py-2.5 px-3 font-semibold text-on-surface">{cat.name}</td>
-                      <td className="py-2.5 px-3 text-primary">{cat.code}</td>
-                      <td className="py-2.5 px-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] border font-medium ${severityInfo.badgeClass}`}
-                        >
-                          {severityInfo.label}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 text-right">
-                        {can('settings:manage') && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCategory(cat)}
-                            className="p-1 text-on-surface-variant hover:text-red-400"
-                            title="Supprimer"
+                {(data?.breakdownCategories || [])
+                  .filter((cat) => {
+                    if (categoryFilterType === 'all') return true;
+                    if (categoryFilterType === 'maintenance') return cat.categoryType === 'maintenance';
+                    return !cat.categoryType || cat.categoryType === 'breakdown';
+                  })
+                  .map((cat) => {
+                    const isMaint = cat.categoryType === 'maintenance';
+                    const severityInfo = SEVERITY_CONFIG[cat.severity] || {
+                      label: cat.severity,
+                      badgeClass: 'bg-surface-container border-[#334155] text-on-surface-variant',
+                    };
+                    return (
+                      <tr key={cat.id} className="hover:bg-surface-variant/30">
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] border font-bold uppercase ${
+                              isMaint
+                                ? 'bg-amber-950/80 text-amber-300 border-amber-500/40'
+                                : 'bg-red-950/80 text-red-300 border-red-500/40'
+                            }`}
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                            {isMaint ? 'Maintenance' : 'Panne'}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <div className="font-semibold text-on-surface">{cat.name}</div>
+                          {cat.description && (
+                            <div className="text-[10px] text-on-surface-variant font-sans truncate max-w-xs">
+                              {cat.description}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-primary">{cat.code}</td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] border font-medium ${severityInfo.badgeClass}`}
+                          >
+                            {severityInfo.label}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          {can('settings:manage') && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCategory(cat)}
+                              className="p-1 text-on-surface-variant hover:text-red-400"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>

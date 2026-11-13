@@ -1558,6 +1558,15 @@ export const FleetDashboard: React.FC = () => {
           categories={data?.breakdownCategories || []}
           garages={data?.garages || []}
           onSuccess={loadFleet}
+          onCategoryCreated={(newCat) => {
+            setData((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                breakdownCategories: [...(prev.breakdownCategories || []), newCat],
+              };
+            });
+          }}
         />
       )}
 
