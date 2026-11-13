@@ -32,6 +32,7 @@ interface BreakdownModalProps {
   isOpen: boolean;
   onClose: () => void;
   target: BreakdownTargetPayload | null;
+  initialScope?: BreakdownTargetScope;
   categories: BreakdownCategoryDTO[];
   onSuccess: () => void;
 }
@@ -40,15 +41,27 @@ export const BreakdownModal: React.FC<BreakdownModalProps> = ({
   isOpen,
   onClose,
   target,
+  initialScope = 'tractor',
   categories,
   onSuccess,
 }) => {
-  const [targetScope, setTargetScope] = useState<BreakdownTargetScope>('tractor');
+  const [targetScope, setTargetScope] = useState<BreakdownTargetScope>(initialScope);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [uncoupleImmediately, setUncoupleImmediately] = useState(false);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Synchronise le scope quand la modale s'ouvre ou que target/initialScope change
+  React.useEffect(() => {
+    if (isOpen) {
+      setTargetScope(initialScope);
+      setSelectedCategoryId('');
+      setUncoupleImmediately(false);
+      setNotes('');
+      setError(null);
+    }
+  }, [isOpen, initialScope, target]);
 
   useEscapeKey(isOpen, onClose);
 

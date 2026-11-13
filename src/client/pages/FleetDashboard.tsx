@@ -22,7 +22,7 @@ import { api } from '../lib/api';
 import { useAuth, useTeamPolicy } from '../context/AuthContext';
 import { CouplingModal } from '../components/CouplingModal';
 import { UncoupleModal } from '../components/UncoupleModal';
-import { BreakdownModal, type BreakdownTargetPayload } from '../components/BreakdownModal';
+import { BreakdownModal, type BreakdownTargetPayload, type BreakdownTargetScope } from '../components/BreakdownModal';
 import { MaintenanceModal } from '../components/MaintenanceModal';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import type {
@@ -101,9 +101,11 @@ export const FleetDashboard: React.FC = () => {
 
   // Modale de déclaration de panne
   const [breakdownTarget, setBreakdownTarget] = useState<BreakdownTargetPayload | null>(null);
+  const [breakdownInitialScope, setBreakdownInitialScope] = useState<BreakdownTargetScope>('tractor');
 
   // Modale de maintenance
   const [maintenanceTarget, setMaintenanceTarget] = useState<BreakdownTargetPayload | null>(null);
+  const [maintenanceInitialScope, setMaintenanceInitialScope] = useState<BreakdownTargetScope>('tractor');
 
   // Modale d'ajout rapide de véhicule
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
@@ -216,10 +218,12 @@ export const FleetDashboard: React.FC = () => {
   // Changement rapide de statut d'un attelage (ou déclenchement de la modale de panne/maintenance)
   const handleStatusChangeRequest = async (
     row: (typeof filteredCouplings)[number],
-    newStatus: VehicleStatus
+    newStatus: VehicleStatus,
+    targetScope: BreakdownTargetScope = 'both'
   ) => {
     if (newStatus === 'breakdown') {
-      // Ouvre la modale complète pour choisir tracteur / remorque / les deux et la catégorie
+      // Ouvre la modale complète avec scope pré-sélectionné (tractor, trailer ou both)
+      setBreakdownInitialScope(targetScope);
       setBreakdownTarget({
         kind: 'coupling',
         id: row.id,
@@ -235,7 +239,8 @@ export const FleetDashboard: React.FC = () => {
     }
 
     if (newStatus === 'maintenance') {
-      // Ouvre la modale complète pour choisir tracteur / remorque / les deux et le garage
+      // Ouvre la modale complète avec scope pré-sélectionné (tractor, trailer ou both)
+      setMaintenanceInitialScope(targetScope);
       setMaintenanceTarget({
         kind: 'coupling',
         id: row.id,
@@ -251,11 +256,15 @@ export const FleetDashboard: React.FC = () => {
     }
 
     try {
-      // Remise en service : s'applique aux deux composants de l'attelage
-      await Promise.all([
-        api.patch(`/api/fleet/tractors/${row.tractorId}`, { status: newStatus }),
-        api.patch(`/api/fleet/trailers/${row.trailerId}`, { status: newStatus }),
-      ]);
+      // Remise en service : s'applique selon le composant sélectionné (tracteur seul, remorque seule, ou les deux)
+      const patches: Promise<any>[] = [];
+      if (targetScope === 'tractor' || targetScope === 'both') {
+        patches.push(api.patch(`/api/fleet/tractors/${row.tractorId}`, { status: newStatus }));
+      }
+      if (targetScope === 'trailer' || targetScope === 'both') {
+        patches.push(api.patch(`/api/fleet/trailers/${row.trailerId}`, { status: newStatus }));
+      }
+      await Promise.all(patches);
       loadFleet();
     } catch (err: any) {
       alert(err?.message || 'Erreur lors de la mise à jour du statut');
@@ -707,11 +716,15 @@ export const FleetDashboard: React.FC = () => {
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1 font-semibold text-on-surface">
                                   <span className="truncate">{row.tractorPlate}</span>
-                                  {row.tractorStatus === 'breakdown' && (
-                                    <span className="px-1 py-0.2 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px] font-normal shrink-0" title="Tracteur en panne">
+                                  {row.tractorStatus === 'breakdown' ? (
+                                    <span className="px-1 py-0.2 rounded bg-red-950/80 text-red-300 border border-red-500/50 text-[9px] font-bold shrink-0 animate-pulse" title="Tracteur en panne">
                                       Panne
                                     </span>
-                                  )}
+                                  ) : row.tractorStatus === 'maintenance' ? (
+                                    <span className="px-1 py-0.2 rounded bg-amber-950/80 text-amber-300 border border-amber-500/50 text-[9px] font-medium shrink-0" title="Tracteur en maintenance">
+                                      Maint.
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <div className="flex items-center gap-1.5 text-[10px] text-on-surface-variant font-sans">
                                   {/* Sur mobile, rappel discret du N° d'ordre en indice */}
@@ -732,11 +745,15 @@ export const FleetDashboard: React.FC = () => {
                           <td className="py-2 px-2.5 sm:px-3">
                             <div className="flex items-center gap-1 font-semibold text-on-surface">
                               <span className="truncate">{row.trailerPlate}</span>
-                              {row.trailerStatus === 'breakdown' && (
-                                <span className="px-1 py-0.2 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px] font-normal shrink-0" title="Remorque en panne">
+                              {row.trailerStatus === 'breakdown' ? (
+                                <span className="px-1 py-0.2 rounded bg-red-950/80 text-red-300 border border-red-500/50 text-[9px] font-bold shrink-0 animate-pulse" title="Remorque en panne">
                                   Panne
                                 </span>
-                              )}
+                              ) : row.trailerStatus === 'maintenance' ? (
+                                <span className="px-1 py-0.2 rounded bg-amber-950/80 text-amber-300 border border-amber-500/50 text-[9px] font-medium shrink-0" title="Remorque en maintenance">
+                                  Maint.
+                                </span>
+                              ) : null}
                             </div>
                             {row.driverName ? (
                               <div className="text-[10px] text-on-surface-variant font-sans truncate max-w-[95px] sm:max-w-none">
@@ -759,15 +776,33 @@ export const FleetDashboard: React.FC = () => {
                           {/* Statut (Badge propre, cliquable avec le reste de la ligne pour ouvrir l'accordéon) */}
                           <td className="py-2 px-2 sm:px-3 whitespace-nowrap">
                             {isBreakdown ? (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-950/50 text-[#ffb4ab] border border-red-500/40 text-[10px] font-medium">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#ffb4ab]"></span>
-                                <span>En Panne</span>
-                              </span>
+                              <div className="inline-flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-950/70 text-[#ffb4ab] border border-red-500/50 text-[10px] font-semibold">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#ffb4ab] animate-ping"></span>
+                                  <span>En Panne</span>
+                                </span>
+                                <span className="text-[9px] text-red-300/80 font-mono">
+                                  {row.tractorStatus === 'breakdown' && row.trailerStatus === 'breakdown'
+                                    ? 'Ensemble (2/2)'
+                                    : row.tractorStatus === 'breakdown'
+                                    ? 'Tracteur seul'
+                                    : 'Remorque seule'}
+                                </span>
+                              </div>
                             ) : isMaintenance ? (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-950/50 text-amber-300 border border-amber-500/40 text-[10px] font-medium">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-300"></span>
-                                <span>Maintenance</span>
-                              </span>
+                              <div className="inline-flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-950/70 text-amber-300 border border-amber-500/50 text-[10px] font-semibold">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-300"></span>
+                                  <span>Maintenance</span>
+                                </span>
+                                <span className="text-[9px] text-amber-300/80 font-mono">
+                                  {row.tractorStatus === 'maintenance' && row.trailerStatus === 'maintenance'
+                                    ? 'Ensemble (2/2)'
+                                    : row.tractorStatus === 'maintenance'
+                                    ? 'Tracteur seul'
+                                    : 'Remorque seule'}
+                                </span>
+                              </div>
                             ) : (
                               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/50 text-[#4edea3] border border-emerald-500/40 text-[10px] font-medium">
                                 <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3]"></span>
@@ -804,7 +839,8 @@ export const FleetDashboard: React.FC = () => {
                                   onChange={(e) =>
                                     handleStatusChangeRequest(
                                       row,
-                                      e.target.value as VehicleStatus
+                                      e.target.value as VehicleStatus,
+                                      'both'
                                     )
                                   }
                                   aria-label={`Changer statut de l'attelage ${row.orderNumber}`}
@@ -849,46 +885,140 @@ export const FleetDashboard: React.FC = () => {
                                       </span>
                                     </div>
 
-                                    {/* Statut par élément de l'attelage */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
-                                      <div className={`p-2 rounded border flex items-center justify-between ${
+                                    {/* Statut par élément de l'attelage avec actions directes */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                      {/* Tracteur */}
+                                      <div className={`p-2.5 rounded-lg border flex flex-col gap-2 ${
                                         row.tractorStatus === 'breakdown'
                                           ? 'bg-red-950/40 border-red-500/50 text-red-200'
                                           : row.tractorStatus === 'maintenance'
                                           ? 'bg-amber-950/40 border-amber-500/50 text-amber-200'
                                           : 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
                                       }`}>
-                                        <div className="flex items-center gap-1.5">
-                                          <Truck className="w-3.5 h-3.5" />
-                                          <span>Tracteur ({row.tractorPlate}) :</span>
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-1.5">
+                                            <Truck className="w-3.5 h-3.5" />
+                                            <span className="font-semibold">Tracteur ({row.tractorPlate})</span>
+                                          </div>
+                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                            row.tractorStatus === 'breakdown'
+                                              ? 'bg-red-950 text-red-300 border border-red-500/50'
+                                              : row.tractorStatus === 'maintenance'
+                                              ? 'bg-amber-950 text-amber-300 border border-amber-500/50'
+                                              : 'bg-emerald-950 text-[#4edea3] border border-emerald-500/50'
+                                          }`}>
+                                            {row.tractorStatus === 'breakdown'
+                                              ? 'En Panne'
+                                              : row.tractorStatus === 'maintenance'
+                                              ? 'Maintenance'
+                                              : 'Opérationnel'}
+                                          </span>
                                         </div>
-                                        <strong className="uppercase">
-                                          {row.tractorStatus === 'breakdown'
-                                            ? 'En Panne'
-                                            : row.tractorStatus === 'maintenance'
-                                            ? 'Maintenance'
-                                            : 'Opérationnel'}
-                                        </strong>
+
+                                        {can('fleet:manage') && (
+                                          <div className="flex items-center justify-between pt-1 border-t border-white/10 gap-2">
+                                            <span className="text-[10px] text-on-surface-variant font-medium">Changer état tracteur :</span>
+                                            <div className="flex items-center gap-1">
+                                              {row.tractorStatus !== 'in_service' && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleStatusChangeRequest(row, 'in_service', 'tractor')}
+                                                  className="px-2 py-0.5 rounded bg-emerald-900/60 hover:bg-emerald-800 text-[#4edea3] border border-emerald-500/50 text-[10px] font-semibold transition-colors"
+                                                  title="Remettre en service le tracteur"
+                                                >
+                                                  Remettre en service
+                                                </button>
+                                              )}
+                                              {row.tractorStatus !== 'breakdown' && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleStatusChangeRequest(row, 'breakdown', 'tractor')}
+                                                  className="px-2 py-0.5 rounded bg-red-900/50 hover:bg-red-800 text-red-300 border border-red-500/40 text-[10px] transition-colors"
+                                                  title="Déclarer une panne sur le tracteur"
+                                                >
+                                                  Panne...
+                                                </button>
+                                              )}
+                                              {row.tractorStatus !== 'maintenance' && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleStatusChangeRequest(row, 'maintenance', 'tractor')}
+                                                  className="px-2 py-0.5 rounded bg-amber-900/50 hover:bg-amber-800 text-amber-300 border border-amber-500/40 text-[10px] transition-colors"
+                                                  title="Placer le tracteur en maintenance"
+                                                >
+                                                  Atelier...
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
 
-                                      <div className={`p-2 rounded border flex items-center justify-between ${
+                                      {/* Remorque */}
+                                      <div className={`p-2.5 rounded-lg border flex flex-col gap-2 ${
                                         row.trailerStatus === 'breakdown'
                                           ? 'bg-red-950/40 border-red-500/50 text-red-200'
                                           : row.trailerStatus === 'maintenance'
                                           ? 'bg-amber-950/40 border-amber-500/50 text-amber-200'
                                           : 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
                                       }`}>
-                                        <div className="flex items-center gap-1.5">
-                                          <Truck className="w-3.5 h-3.5" />
-                                          <span>Remorque ({row.trailerPlate}) :</span>
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-1.5">
+                                            <Truck className="w-3.5 h-3.5" />
+                                            <span className="font-semibold">Remorque ({row.trailerPlate})</span>
+                                          </div>
+                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                            row.trailerStatus === 'breakdown'
+                                              ? 'bg-red-950 text-red-300 border border-red-500/50'
+                                              : row.trailerStatus === 'maintenance'
+                                              ? 'bg-amber-950 text-amber-300 border border-amber-500/50'
+                                              : 'bg-emerald-950 text-[#4edea3] border border-emerald-500/50'
+                                          }`}>
+                                            {row.trailerStatus === 'breakdown'
+                                              ? 'En Panne'
+                                              : row.trailerStatus === 'maintenance'
+                                              ? 'Maintenance'
+                                              : 'Opérationnelle'}
+                                          </span>
                                         </div>
-                                        <strong className="uppercase">
-                                          {row.trailerStatus === 'breakdown'
-                                            ? 'En Panne'
-                                            : row.trailerStatus === 'maintenance'
-                                            ? 'Maintenance'
-                                            : 'Opérationnelle'}
-                                        </strong>
+
+                                        {can('fleet:manage') && (
+                                          <div className="flex items-center justify-between pt-1 border-t border-white/10 gap-2">
+                                            <span className="text-[10px] text-on-surface-variant font-medium">Changer état remorque :</span>
+                                            <div className="flex items-center gap-1">
+                                              {row.trailerStatus !== 'in_service' && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleStatusChangeRequest(row, 'in_service', 'trailer')}
+                                                  className="px-2 py-0.5 rounded bg-emerald-900/60 hover:bg-emerald-800 text-[#4edea3] border border-emerald-500/50 text-[10px] font-semibold transition-colors"
+                                                  title="Remettre en service la remorque"
+                                                >
+                                                  Remettre en service
+                                                </button>
+                                              )}
+                                              {row.trailerStatus !== 'breakdown' && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleStatusChangeRequest(row, 'breakdown', 'trailer')}
+                                                  className="px-2 py-0.5 rounded bg-red-900/50 hover:bg-red-800 text-red-300 border border-red-500/40 text-[10px] transition-colors"
+                                                  title="Déclarer une panne sur la remorque"
+                                                >
+                                                  Panne...
+                                                </button>
+                                              )}
+                                              {row.trailerStatus !== 'maintenance' && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleStatusChangeRequest(row, 'maintenance', 'trailer')}
+                                                  className="px-2 py-0.5 rounded bg-amber-900/50 hover:bg-amber-800 text-amber-300 border border-amber-500/40 text-[10px] transition-colors"
+                                                  title="Placer la remorque en maintenance"
+                                                >
+                                                  Atelier...
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
 
@@ -998,17 +1128,21 @@ export const FleetDashboard: React.FC = () => {
                                   </div>
                                 </div>
 
-                                {/* Section 3 : Actions rapides harmonisées */}
+                                {/* Section 3 : Actions rapides globales sur l'attelage */}
                                 <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-[#334155]/50 items-stretch sm:items-center justify-between">
-                                  {/* Sélecteur de statut d'attelage */}
+                                  {/* Sélecteur de statut pour l'ensemble complet */}
                                   {can('fleet:manage') && (
                                     <div className="flex items-center justify-between p-2 rounded-lg bg-[#020617]/70 border border-[#334155]/60 gap-3 flex-1">
                                       <div className="flex flex-col">
                                         <span className="text-[10px] uppercase font-mono tracking-wider text-on-surface-variant font-medium">
-                                          Changer le statut de l'attelage
+                                          Statut global de l'attelage (ensemble)
                                         </span>
                                         <span className="text-[11px] font-mono text-on-surface">
-                                          Actuel : {isBreakdown ? 'En Panne' : isMaintenance ? 'En Maintenance' : 'En Service'}
+                                          {isBreakdown
+                                            ? `En Panne (${row.tractorStatus === 'breakdown' && row.trailerStatus === 'breakdown' ? 'Ensemble' : row.tractorStatus === 'breakdown' ? 'Tracteur seul' : 'Remorque seule'})`
+                                            : isMaintenance
+                                            ? `En Maintenance (${row.tractorStatus === 'maintenance' && row.trailerStatus === 'maintenance' ? 'Ensemble' : row.tractorStatus === 'maintenance' ? 'Tracteur seul' : 'Remorque seule'})`
+                                            : 'En Service (Opérationnel)'}
                                         </span>
                                       </div>
                                       <select
@@ -1022,10 +1156,11 @@ export const FleetDashboard: React.FC = () => {
                                         onChange={(e) =>
                                           handleStatusChangeRequest(
                                             row,
-                                            e.target.value as VehicleStatus
+                                            e.target.value as VehicleStatus,
+                                            'both'
                                           )
                                         }
-                                        aria-label={`Changer statut de l'attelage ${row.orderNumber}`}
+                                        aria-label={`Changer statut global de l'attelage ${row.orderNumber}`}
                                         className={`border rounded-lg text-xs font-mono py-1.5 px-3 focus:outline-none focus:ring-1 cursor-pointer font-medium transition-colors ${
                                           row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown'
                                             ? 'bg-red-950/60 border-red-500/60 text-red-300'
@@ -1035,7 +1170,7 @@ export const FleetDashboard: React.FC = () => {
                                         }`}
                                       >
                                         <option value="in_service" className="bg-[#020617] text-[#4edea3]">
-                                          En Service
+                                          En Service (Ensemble)
                                         </option>
                                         <option value="breakdown" className="bg-[#020617] text-red-300">
                                           En Panne...
@@ -1552,6 +1687,7 @@ export const FleetDashboard: React.FC = () => {
           isOpen={!!breakdownTarget}
           onClose={() => setBreakdownTarget(null)}
           target={breakdownTarget}
+          initialScope={breakdownInitialScope}
           categories={data?.breakdownCategories || []}
           onSuccess={loadFleet}
         />
@@ -1563,6 +1699,7 @@ export const FleetDashboard: React.FC = () => {
           isOpen={!!maintenanceTarget}
           onClose={() => setMaintenanceTarget(null)}
           target={maintenanceTarget}
+          initialScope={maintenanceInitialScope}
           garages={data?.garages || []}
           onSuccess={loadFleet}
         />

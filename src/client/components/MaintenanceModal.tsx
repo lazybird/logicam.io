@@ -10,6 +10,7 @@ interface MaintenanceModalProps {
   isOpen: boolean;
   onClose: () => void;
   target: BreakdownTargetPayload | null;
+  initialScope?: BreakdownTargetScope;
   garages: GarageDTO[];
   onSuccess: () => void;
 }
@@ -18,16 +19,29 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
   isOpen,
   onClose,
   target,
+  initialScope = 'tractor',
   garages,
   onSuccess,
 }) => {
-  const [targetScope, setTargetScope] = useState<BreakdownTargetScope>('tractor');
+  const [targetScope, setTargetScope] = useState<BreakdownTargetScope>(initialScope);
   const [selectedGarageId, setSelectedGarageId] = useState<string>('');
   const [maintenanceType, setMaintenanceType] = useState<'vidange' | 'revision' | 'pneus' | 'autre'>('vidange');
   const [uncoupleImmediately, setUncoupleImmediately] = useState(false);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Synchronise le scope quand la modale s'ouvre ou que target/initialScope change
+  React.useEffect(() => {
+    if (isOpen) {
+      setTargetScope(initialScope);
+      setSelectedGarageId('');
+      setMaintenanceType('vidange');
+      setUncoupleImmediately(false);
+      setNotes('');
+      setError(null);
+    }
+  }, [isOpen, initialScope, target]);
 
   useEscapeKey(isOpen, onClose);
 
