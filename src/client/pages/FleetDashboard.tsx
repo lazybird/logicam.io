@@ -816,54 +816,35 @@ export const FleetDashboard: React.FC = () => {
                           </td>
                         </tr>
 
-                        {/* Accordéon Dépliable sur Mobile (< md) */}
+                        {/* Accordéon Dépliable sur Mobile (< md) — Uniquement les infos complémentaires et actions */}
                         {isExpanded && (
                           <tr className="md:hidden bg-[#020617]/95 border-y border-[#334155]">
                             <td colSpan={3} className="p-3">
-                              <div className="flex flex-col gap-3 font-mono text-xs">
-                                {/* En-tête de l'accordéon : Rappel N° Ordre & Type */}
-                                <div className="flex items-center justify-between text-[11px] pb-1 border-b border-[#334155]/40">
-                                  <span className="text-on-surface-variant">
-                                    N° d'ordre : <strong className="text-[#ffb77d]">{row.orderNumber}</strong>
-                                  </span>
-                                  <span className="px-2 py-0.5 rounded bg-surface-container-high border border-[#334155] text-[10px] uppercase text-on-surface-variant">
-                                    {row.trailerType}
-                                  </span>
-                                </div>
-
-                                {/* Détails complémentaires */}
-                                <div className="grid grid-cols-2 gap-2 bg-surface-container border border-[#334155]/60 rounded p-2.5 text-[11px]">
-                                  <div>
-                                    <span className="text-on-surface-variant block text-[10px]">TRACTEUR</span>
-                                    <span className="font-bold text-on-surface">{row.tractorPlate}</span>
-                                    {row.tractorBrandModel && (
-                                      <span className="text-[10px] text-on-surface-variant block font-sans">
-                                        {row.tractorBrandModel}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div>
-                                    <span className="text-on-surface-variant block text-[10px]">REMORQUE & CHAUFFEUR</span>
-                                    <span className="font-bold text-on-surface">{row.trailerPlate}</span>
-                                    <span className="text-[10px] text-on-surface-variant block font-sans">
-                                      {row.driverName || 'Chauffeur non assigné'}
+                              <div className="flex flex-col gap-2.5 font-mono text-xs">
+                                {/* Infos complémentaires non visibles dans la ligne du tableau : Type remorque, Kilométrage, Vidange */}
+                                <div className="flex items-center justify-between bg-surface-container border border-[#334155]/60 rounded px-3 py-2 text-[11px]">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-on-surface-variant text-[10px]">TYPE :</span>
+                                    <span className="px-1.5 py-0.5 rounded bg-surface-container-high border border-[#334155] text-[10px] uppercase text-on-surface">
+                                      {row.trailerType}
                                     </span>
                                   </div>
-                                  <div className="col-span-2 pt-1.5 border-t border-[#334155]/50 flex items-center justify-between">
+
+                                  <div className="flex items-center gap-3">
                                     <div className="flex items-center gap-1.5 text-on-surface-variant">
                                       <Gauge className="w-3.5 h-3.5 text-primary" />
-                                      <span>{(row.mileageKm ?? 0).toLocaleString()} km</span>
+                                      <span className="text-on-surface">{(row.mileageKm ?? 0).toLocaleString()} km</span>
                                     </div>
                                     {oilDue && (
                                       <span className="text-[10px] text-amber-400 font-sans font-medium bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-500/30">
-                                        ⚠️ Vidange requise
+                                        ⚠️ Vidange
                                       </span>
                                     )}
                                   </div>
                                 </div>
 
                                 {/* Actions Mobile avec libellés complets */}
-                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-0.5">
                                   {can('fleet:manage') && (
                                     <div className="flex-1 flex flex-col gap-1">
                                       <label
