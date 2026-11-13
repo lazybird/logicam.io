@@ -63,6 +63,8 @@ export const FleetDashboard: React.FC = () => {
   // Filtres
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | VehicleStatus>('ALL');
+  const [trailerTypeFilter, setTrailerTypeFilter] = useState<string>('ALL');
+  const [oilDueFilterOnly, setOilDueFilterOnly] = useState<boolean>(false);
   const [unassignedStatusFilter, setUnassignedStatusFilter] = useState<'ALL' | VehicleStatus>('ALL');
   const [activeTab, setActiveTab] = useState<'couplings' | 'unassigned'>('couplings');
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
@@ -160,6 +162,20 @@ export const FleetDashboard: React.FC = () => {
         if (itemStatus !== statusFilter) return false;
       }
 
+      // Filtre Type Remorque
+      if (trailerTypeFilter !== 'ALL') {
+        if (item.trailerType !== trailerTypeFilter) return false;
+      }
+
+      // Filtre Vidange urgente (<= 5000 km)
+      if (oilDueFilterOnly) {
+        const oilDue =
+          item.nextOilChangeKm != null &&
+          item.mileageKm != null &&
+          item.nextOilChangeKm - item.mileageKm <= 5000;
+        if (!oilDue) return false;
+      }
+
       // Recherche textuelle
       if (search.trim()) {
         const term = search.toLowerCase();
@@ -175,7 +191,7 @@ export const FleetDashboard: React.FC = () => {
 
       return true;
     });
-  }, [data?.couplings, search, statusFilter]);
+  }, [data?.couplings, search, statusFilter, trailerTypeFilter, oilDueFilterOnly]);
 
   // Véhicules libres
   const freeTractors = useMemo(() => {
@@ -433,13 +449,42 @@ export const FleetDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* 3 Cartes KPIs Principales */}
+      {/* 3 Cartes KPIs Principales - Interactives (clic pour filtrer) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* KPI 1 : En service */}
-        <div className="bg-surface border border-[#334155] rounded p-4 flex flex-col gap-1.5 relative overflow-hidden">
+        <div
+          onClick={() => {
+            setActiveTab('couplings');
+            setOilDueFilterOnly(false);
+            setStatusFilter((prev) => (prev === 'in_service' && !oilDueFilterOnly ? 'ALL' : 'in_service'));
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setActiveTab('couplings');
+              setOilDueFilterOnly(false);
+              setStatusFilter((prev) => (prev === 'in_service' && !oilDueFilterOnly ? 'ALL' : 'in_service'));
+            }
+          }}
+          title="Cliquer pour afficher les attelages en service"
+          className={`bg-surface border rounded p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-all hover:bg-surface-variant/40 hover:border-[#4edea3]/50 select-none ${
+            statusFilter === 'in_service' && !oilDueFilterOnly
+              ? 'border-[#4edea3] ring-1 ring-[#4edea3]/40 shadow-[0_0_15px_rgba(78,222,163,0.15)]'
+              : 'border-[#334155]'
+          }`}
+        >
           <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#4edea3]"></div>
           <div className="font-mono text-xs uppercase tracking-wider text-on-surface-variant flex items-center justify-between">
-            <span>Camions en service</span>
+            <span className="flex items-center gap-1.5">
+              <span>Camions en service</span>
+              {statusFilter === 'in_service' && !oilDueFilterOnly && (
+                <span className="text-[10px] px-1 rounded bg-[#4edea3]/20 text-[#4edea3] lowercase font-sans">
+                  filtre actif
+                </span>
+              )}
+            </span>
             <Truck className="w-4 h-4 text-[#4edea3]" />
           </div>
           <div className="font-mono text-3xl font-bold text-on-surface">
@@ -452,10 +497,39 @@ export const FleetDashboard: React.FC = () => {
         </div>
 
         {/* KPI 2 : En panne */}
-        <div className="bg-surface border border-[#334155] rounded p-4 flex flex-col gap-1.5 relative overflow-hidden">
+        <div
+          onClick={() => {
+            setActiveTab('couplings');
+            setOilDueFilterOnly(false);
+            setStatusFilter((prev) => (prev === 'breakdown' && !oilDueFilterOnly ? 'ALL' : 'breakdown'));
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setActiveTab('couplings');
+              setOilDueFilterOnly(false);
+              setStatusFilter((prev) => (prev === 'breakdown' && !oilDueFilterOnly ? 'ALL' : 'breakdown'));
+            }
+          }}
+          title="Cliquer pour afficher les attelages en panne"
+          className={`bg-surface border rounded p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-all hover:bg-surface-variant/40 hover:border-red-500/50 select-none ${
+            statusFilter === 'breakdown' && !oilDueFilterOnly
+              ? 'border-red-500 ring-1 ring-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.15)]'
+              : 'border-[#334155]'
+          }`}
+        >
           <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ffb4ab]"></div>
           <div className="font-mono text-xs uppercase tracking-wider text-on-surface-variant flex items-center justify-between">
-            <span>En panne</span>
+            <span className="flex items-center gap-1.5">
+              <span>En panne</span>
+              {statusFilter === 'breakdown' && !oilDueFilterOnly && (
+                <span className="text-[10px] px-1 rounded bg-red-950 text-red-300 border border-red-500/40 lowercase font-sans">
+                  filtre actif
+                </span>
+              )}
+            </span>
             <AlertTriangle className="w-4 h-4 text-[#ffb4ab]" />
           </div>
           <div className="font-mono text-3xl font-bold text-[#ffb4ab]">
@@ -467,10 +541,39 @@ export const FleetDashboard: React.FC = () => {
         </div>
 
         {/* KPI 3 : Vidanges prévues */}
-        <div className="bg-surface border border-[#334155] rounded p-4 flex flex-col gap-1.5 relative overflow-hidden">
+        <div
+          onClick={() => {
+            setActiveTab('couplings');
+            setStatusFilter('ALL');
+            setOilDueFilterOnly((prev) => !prev);
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setActiveTab('couplings');
+              setStatusFilter('ALL');
+              setOilDueFilterOnly((prev) => !prev);
+            }
+          }}
+          title="Cliquer pour filtrer les camions nécessitant une vidange sous 5 000 km"
+          className={`bg-surface border rounded p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-all hover:bg-surface-variant/40 hover:border-[#ff8c00]/50 select-none ${
+            oilDueFilterOnly
+              ? 'border-[#ff8c00] ring-1 ring-[#ff8c00]/40 shadow-[0_0_15px_rgba(255,140,0,0.15)]'
+              : 'border-[#334155]'
+          }`}
+        >
           <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff8c00]"></div>
           <div className="font-mono text-xs uppercase tracking-wider text-on-surface-variant flex items-center justify-between">
-            <span>Vidanges Prévues</span>
+            <span className="flex items-center gap-1.5">
+              <span>Vidanges Prévues</span>
+              {oilDueFilterOnly && (
+                <span className="text-[10px] px-1 rounded bg-amber-950 text-amber-300 border border-amber-500/40 lowercase font-sans">
+                  filtre actif
+                </span>
+              )}
+            </span>
             <Wrench className="w-4 h-4 text-[#ff8c00]" />
           </div>
           <div className="font-mono text-3xl font-bold text-[#ffb77d]">
@@ -482,55 +585,22 @@ export const FleetDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Barre de pilotage de la réserve et sélection de vue */}
-      <div className="bg-surface-container border border-[#334155] rounded p-2.5 sm:p-3 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
-        {/* Indicateur de capacité opérationnelle immédiate */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <span className="text-on-surface-variant text-[11px] uppercase tracking-wider font-semibold">
-            Réserve opérationnelle :
-          </span>
-
-          {formableCouplings > 0 ? (
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-[#4edea3]/10 border border-[#4edea3]/30 text-[#4edea3]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3] animate-pulse"></span>
-              <span className="font-semibold">
-                {formableCouplings} attelage{formableCouplings > 1 ? 's' : ''} composable{formableCouplings > 1 ? 's' : ''} immédiatement
-              </span>
-              <span className="text-on-surface-variant text-[11px]">
-                ({operationalFreeTractors.length} tracteur{operationalFreeTractors.length > 1 ? 's' : ''} & {operationalFreeTrailers.length} remorque{operationalFreeTrailers.length > 1 ? 's' : ''} prêts)
-              </span>
-            </div>
-          ) : operationalFreeTractors.length > 0 || operationalFreeTrailers.length > 0 ? (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-              <span>
-                {operationalFreeTractors.length > 0
-                  ? `${operationalFreeTractors.length} tracteur${operationalFreeTractors.length > 1 ? 's' : ''} en attente de remorque`
-                  : `${operationalFreeTrailers.length} remorque${operationalFreeTrailers.length > 1 ? 's' : ''} en attente de tracteur`}
-              </span>
-            </div>
-          ) : (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-container-high border border-[#334155] text-on-surface-variant">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#4edea3]" />
-              <span>100% de la flotte mobilisée (aucun matériel en attente)</span>
-            </div>
-          )}
-        </div>
-
-        {/* Sélecteur de vue (onglets) avec badges compacts */}
+      {/* Barre d'onglets épurée et compacte (incorporant l'état de la réserve opérationnelle) */}
+      <div className="flex items-center justify-between gap-3 border-b border-[#334155] pb-1 pt-1 font-mono text-xs">
         <div className="flex items-center gap-2">
+          {/* Onglet Attelés */}
           <button
             type="button"
             onClick={() => setActiveTab('couplings')}
-            className={`px-3 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded text-xs transition-colors flex items-center gap-2 ${
               activeTab === 'couplings'
                 ? 'bg-[#ff8c00] text-black font-semibold shadow-[0_0_10px_rgba(255,140,0,0.2)]'
-                : 'bg-surface border border-[#334155] text-on-surface-variant hover:text-on-surface'
+                : 'bg-surface border border-[#334155] text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/30'
             }`}
           >
             <span>Attelés</span>
             <span
-              className={`px-1.5 py-0.5 rounded text-[10px] ${
+              className={`px-1.5 py-0.2 rounded text-[10px] ${
                 activeTab === 'couplings'
                   ? 'bg-black/20 text-black font-bold'
                   : 'bg-surface-container-high text-on-surface-variant'
@@ -539,18 +609,20 @@ export const FleetDashboard: React.FC = () => {
               {data?.couplings.length ?? 0}
             </span>
           </button>
+
+          {/* Onglet Non attelés avec badge d'attelages prêts intégrés */}
           <button
             type="button"
             onClick={() => setActiveTab('unassigned')}
-            className={`px-3 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded text-xs transition-colors flex items-center gap-2 ${
               activeTab === 'unassigned'
                 ? 'bg-[#ff8c00] text-black font-semibold shadow-[0_0_10px_rgba(255,140,0,0.2)]'
-                : 'bg-surface border border-[#334155] text-on-surface-variant hover:text-on-surface'
+                : 'bg-surface border border-[#334155] text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/30'
             }`}
           >
             <span>Non attelés</span>
             <span
-              className={`px-1.5 py-0.5 rounded text-[10px] ${
+              className={`px-1.5 py-0.2 rounded text-[10px] ${
                 activeTab === 'unassigned'
                   ? 'bg-black/20 text-black font-bold'
                   : 'bg-surface-container-high text-on-surface-variant'
@@ -558,8 +630,81 @@ export const FleetDashboard: React.FC = () => {
             >
               {freeTractors.length + freeTrailers.length}
             </span>
+
+            {/* Badge compact de réserve opérationnelle directement dans l'onglet */}
+            {formableCouplings > 0 ? (
+              <span
+                className={`hidden sm:inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-sans ${
+                  activeTab === 'unassigned'
+                    ? 'bg-black/25 text-black font-semibold'
+                    : 'bg-emerald-950/60 border border-emerald-500/40 text-[#4edea3]'
+                }`}
+                title={`${formableCouplings} attelages composables immédiatement (${operationalFreeTractors.length} tracteurs & ${operationalFreeTrailers.length} remorques prêts)`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>{formableCouplings} prêt{formableCouplings > 1 ? 's' : ''}</span>
+              </span>
+            ) : operationalFreeTractors.length > 0 || operationalFreeTrailers.length > 0 ? (
+              <span
+                className={`hidden sm:inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-sans ${
+                  activeTab === 'unassigned'
+                    ? 'bg-black/25 text-black font-semibold'
+                    : 'bg-amber-950/60 border border-amber-500/40 text-amber-300'
+                }`}
+                title="Véhicules disponibles en attente de complément"
+              >
+                <span>{operationalFreeTractors.length > 0 ? `${operationalFreeTractors.length} tracteur(s)` : `${operationalFreeTrailers.length} remorque(s)`}</span>
+              </span>
+            ) : null}
           </button>
         </div>
+
+        {/* Indicateur discret si filtre appliqué */}
+        {(statusFilter !== 'ALL' || trailerTypeFilter !== 'ALL' || oilDueFilterOnly || search.trim()) && (
+          <div className="flex items-center gap-2 text-[11px] font-sans text-on-surface-variant">
+            {/* Filtre Type Remorque actif */}
+            {trailerTypeFilter !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface border border-primary/40 text-primary text-[11px]">
+                <span>Type : {trailerTypeFilter}</span>
+                <button
+                  type="button"
+                  onClick={() => setTrailerTypeFilter('ALL')}
+                  className="hover:text-white"
+                  title="Effacer le filtre type"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {/* Filtre Vidange urgente actif */}
+            {oilDueFilterOnly && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950/60 border border-amber-500/40 text-amber-300 text-[11px]">
+                <span>Vidanges sous 5 000 km</span>
+                <button
+                  type="button"
+                  onClick={() => setOilDueFilterOnly(false)}
+                  className="hover:text-white"
+                  title="Effacer le filtre vidange"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('ALL');
+                setTrailerTypeFilter('ALL');
+                setOilDueFilterOnly(false);
+                setSearch('');
+              }}
+              className="text-[#ff8c00] hover:underline font-mono text-[10px]"
+            >
+              Réinitialiser
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Vue Onglet 1 : Tableau des Attelages */}
@@ -654,13 +799,23 @@ export const FleetDashboard: React.FC = () => {
                           }}
                           aria-expanded={isExpanded}
                           aria-label={`Attelage ${row.orderNumber}, Tracteur ${row.tractorPlate}, Remorque ${row.trailerPlate}. Cliquer pour ${isExpanded ? 'replier' : 'déplier'} les détails et actions.`}
-                          className={`transition-colors cursor-pointer select-none ${
-                            isExpanded ? 'bg-surface-container-high/60' : 'hover:bg-surface-variant/30 bg-surface'
+                          className={`transition-all cursor-pointer select-none relative ${
+                            isExpanded
+                              ? `bg-[#131d36] shadow-md border-l-4 ${
+                                  isBreakdown
+                                    ? 'border-l-red-500'
+                                    : isMaintenance
+                                    ? 'border-l-amber-500'
+                                    : 'border-l-[#ff8c00]'
+                                }`
+                              : 'hover:bg-surface-variant/40 bg-surface border-l-4 border-l-transparent'
                           }`}
                         >
                           {/* N° Ordre (Desktop md+ uniquement) */}
-                          <td className="hidden md:table-cell py-2.5 px-3 text-[#ffb77d] font-semibold whitespace-nowrap">
-                            <span>{row.orderNumber}</span>
+                          <td className="hidden md:table-cell py-2.5 px-3 whitespace-nowrap">
+                            <span className={`font-semibold ${isExpanded ? 'text-[#ffb77d] underline decoration-[#ff8c00]/60 underline-offset-4' : 'text-[#ffb77d]'}`}>
+                              {row.orderNumber}
+                            </span>
                           </td>
 
                           {/* Tracteur (avec chevron indicateur et pastille N° ordre sur mobile) */}
@@ -671,21 +826,45 @@ export const FleetDashboard: React.FC = () => {
                                 {isExpanded ? (
                                   <ChevronDown className="w-3.5 h-3.5 text-[#ff8c00]" />
                                 ) : (
-                                  <ChevronRight className="w-3.5 h-3.5" />
+                                  <ChevronRight className="w-3.5 h-3.5 text-on-surface-variant group-hover:text-primary" />
                                 )}
                               </span>
 
                               <div className="min-w-0">
-                                <div className="flex items-center gap-1 font-semibold text-on-surface">
+                                <div className="flex items-center gap-1.5 font-semibold text-on-surface">
                                   <span className="truncate">{row.tractorPlate}</span>
                                   {row.tractorStatus === 'breakdown' ? (
-                                    <span className="px-1 py-0.2 rounded bg-red-950/80 text-red-300 border border-red-500/50 text-[9px] font-bold shrink-0 animate-pulse" title="Tracteur en panne">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (can('fleet:manage')) {
+                                          openCouplingStatusModal(row, 'tractor');
+                                        } else {
+                                          toggleRowExpanded(row.id);
+                                        }
+                                      }}
+                                      className="px-1.5 py-0.5 rounded bg-red-950 text-red-300 border border-red-500/60 text-[9px] font-bold shrink-0 animate-pulse hover:bg-red-900 transition-colors"
+                                      title={can('fleet:manage') ? "Cliquer pour gérer la panne du tracteur" : "Tracteur en panne"}
+                                    >
                                       Panne
-                                    </span>
+                                    </button>
                                   ) : row.tractorStatus === 'maintenance' ? (
-                                    <span className="px-1 py-0.2 rounded bg-amber-950/80 text-amber-300 border border-amber-500/50 text-[9px] font-medium shrink-0" title="Tracteur en maintenance">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (can('fleet:manage')) {
+                                          openCouplingStatusModal(row, 'tractor');
+                                        } else {
+                                          toggleRowExpanded(row.id);
+                                        }
+                                      }}
+                                      className="px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/60 text-[9px] font-medium shrink-0 hover:bg-amber-900 transition-colors"
+                                      title={can('fleet:manage') ? "Cliquer pour gérer la maintenance du tracteur" : "Tracteur en maintenance"}
+                                    >
                                       Maint.
-                                    </span>
+                                    </button>
                                   ) : null}
                                 </div>
                                 <div className="flex items-center gap-1.5 text-[10px] text-on-surface-variant font-sans">
@@ -705,16 +884,40 @@ export const FleetDashboard: React.FC = () => {
 
                           {/* Remorque */}
                           <td className="py-2 px-2.5 sm:px-3">
-                            <div className="flex items-center gap-1 font-semibold text-on-surface">
+                            <div className="flex items-center gap-1.5 font-semibold text-on-surface">
                               <span className="truncate">{row.trailerPlate}</span>
                               {row.trailerStatus === 'breakdown' ? (
-                                <span className="px-1 py-0.2 rounded bg-red-950/80 text-red-300 border border-red-500/50 text-[9px] font-bold shrink-0 animate-pulse" title="Remorque en panne">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (can('fleet:manage')) {
+                                      openCouplingStatusModal(row, 'trailer');
+                                    } else {
+                                      toggleRowExpanded(row.id);
+                                    }
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-red-950 text-red-300 border border-red-500/60 text-[9px] font-bold shrink-0 animate-pulse hover:bg-red-900 transition-colors"
+                                  title={can('fleet:manage') ? "Cliquer pour gérer la panne de la remorque" : "Remorque en panne"}
+                                >
                                   Panne
-                                </span>
+                                </button>
                               ) : row.trailerStatus === 'maintenance' ? (
-                                <span className="px-1 py-0.2 rounded bg-amber-950/80 text-amber-300 border border-amber-500/50 text-[9px] font-medium shrink-0" title="Remorque en maintenance">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (can('fleet:manage')) {
+                                      openCouplingStatusModal(row, 'trailer');
+                                    } else {
+                                      toggleRowExpanded(row.id);
+                                    }
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/60 text-[9px] font-medium shrink-0 hover:bg-amber-900 transition-colors"
+                                  title={can('fleet:manage') ? "Cliquer pour gérer la maintenance de la remorque" : "Remorque en maintenance"}
+                                >
                                   Maint.
-                                </span>
+                                </button>
                               ) : null}
                             </div>
                             {row.driverName ? (
@@ -728,27 +931,53 @@ export const FleetDashboard: React.FC = () => {
                             )}
                           </td>
 
-                          {/* Type Remorque (Desktop uniquement) */}
+                          {/* Type Remorque (Desktop uniquement) - Cliquable pour filtrer */}
                           <td className="hidden md:table-cell py-2.5 px-3">
-                            <span className="px-2 py-0.5 rounded bg-surface-container-high border border-[#334155] text-[10px] text-on-surface-variant uppercase">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTrailerTypeFilter((prev) => (prev === row.trailerType ? 'ALL' : row.trailerType));
+                              }}
+                              className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold transition-all border ${
+                                trailerTypeFilter === row.trailerType
+                                  ? 'bg-[#ff8c00] text-black border-[#ff8c00] shadow-[0_0_8px_rgba(255,140,0,0.3)]'
+                                  : 'bg-surface-container-high border-[#334155] text-on-surface-variant hover:text-on-surface hover:border-[#ff8c00]/60 hover:bg-surface-variant'
+                              }`}
+                              title={`Cliquer pour filtrer les attelages par remorque ${row.trailerType}`}
+                            >
                               {row.trailerType}
-                            </span>
+                            </button>
                           </td>
 
                           {/* Kilométrage (Desktop uniquement) */}
                           <td className="hidden md:table-cell py-2.5 px-3 text-right whitespace-nowrap">
                             <div>{(row.mileageKm ?? 0).toLocaleString()} km</div>
                             {oilDue && (
-                              <span className="text-[10px] text-amber-400 font-sans block">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOilDueFilterOnly((prev) => !prev);
+                                }}
+                                className="text-[10px] text-amber-400 font-sans block ml-auto hover:underline"
+                                title="Cliquer pour afficher les vidanges sous 5 000 km"
+                              >
                                 ⚠️ Vidange requise
-                              </span>
+                              </button>
                             )}
                           </td>
                         </tr>
 
                         {/* Accordéon Dépliable (Desktop & Mobile) — Détails de panne, infos complémentaires et actions */}
                         {isExpanded && (
-                          <tr className="bg-[#020617]/95 border-y border-[#334155]">
+                          <tr className={`bg-[#060c1d] border-b-2 border-t border-[#334155] ${
+                            isBreakdown
+                              ? 'border-l-4 border-l-red-500'
+                              : isMaintenance
+                              ? 'border-l-4 border-l-amber-500'
+                              : 'border-l-4 border-l-[#ff8c00]'
+                          }`}>
                             <td colSpan={5} className="p-3 sm:p-4">
                               <div className="flex flex-col gap-3 font-mono text-xs">
                                  {/* Section 1 : Détail du Diagnostic & Immobilisation en cours */}
@@ -1096,8 +1325,16 @@ export const FleetDashboard: React.FC = () => {
                             }
                           }}
                           aria-expanded={isExpanded}
-                          className={`py-2.5 px-2 rounded cursor-pointer select-none flex items-center justify-between font-mono text-xs gap-2 ${
-                            isExpanded ? 'bg-surface-container-high/60' : 'hover:bg-surface-variant/30'
+                          className={`py-2.5 px-2 rounded cursor-pointer select-none flex items-center justify-between font-mono text-xs gap-2 transition-all ${
+                            isExpanded
+                              ? `bg-[#131d36] shadow-sm border-l-4 ${
+                                  t.status === 'breakdown'
+                                    ? 'border-l-red-500'
+                                    : t.status === 'maintenance'
+                                    ? 'border-l-amber-500'
+                                    : 'border-l-[#ff8c00]'
+                                }`
+                              : 'hover:bg-surface-variant/40 border-l-4 border-l-transparent'
                           }`}
                         >
                           <div className="flex-1 min-w-0">
@@ -1111,13 +1348,37 @@ export const FleetDashboard: React.FC = () => {
                               </span>
                               <span className="font-bold text-on-surface">{t.plateNumber}</span>
                               {t.status === 'breakdown' ? (
-                                <span className="px-1.5 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px]">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (can('fleet:manage')) {
+                                      openStandaloneStatusModal('tractor', t);
+                                    } else {
+                                      toggleUnassignedExpanded(`tractor-${t.id}`);
+                                    }
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-red-950 text-red-300 border border-red-500/60 text-[9px] font-bold hover:bg-red-900 transition-colors"
+                                  title={can('fleet:manage') ? "Cliquer pour gérer la panne du tracteur" : "Tracteur en panne"}
+                                >
                                   Panne
-                                </span>
+                                </button>
                               ) : t.status === 'maintenance' ? (
-                                <span className="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-500/40 text-[9px]">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (can('fleet:manage')) {
+                                      openStandaloneStatusModal('tractor', t);
+                                    } else {
+                                      toggleUnassignedExpanded(`tractor-${t.id}`);
+                                    }
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/60 text-[9px] font-medium hover:bg-amber-900 transition-colors"
+                                  title={can('fleet:manage') ? "Cliquer pour gérer la maintenance du tracteur" : "Tracteur en maintenance"}
+                                >
                                   Maintenance
-                                </span>
+                                </button>
                               ) : (
                                 <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-[#4edea3] border border-emerald-500/40 text-[9px]">
                                   Prêt
@@ -1336,8 +1597,16 @@ export const FleetDashboard: React.FC = () => {
                             }
                           }}
                           aria-expanded={isExpanded}
-                          className={`py-2.5 px-2 rounded cursor-pointer select-none flex items-center justify-between font-mono text-xs gap-2 ${
-                            isExpanded ? 'bg-surface-container-high/60' : 'hover:bg-surface-variant/30'
+                          className={`py-2.5 px-2 rounded cursor-pointer select-none flex items-center justify-between font-mono text-xs gap-2 transition-all ${
+                            isExpanded
+                              ? `bg-[#131d36] shadow-sm border-l-4 ${
+                                  tr.status === 'breakdown'
+                                    ? 'border-l-red-500'
+                                    : tr.status === 'maintenance'
+                                    ? 'border-l-amber-500'
+                                    : 'border-l-[#4edea3]'
+                                }`
+                              : 'hover:bg-surface-variant/40 border-l-4 border-l-transparent'
                           }`}
                         >
                           <div className="flex-1 min-w-0">
@@ -1351,13 +1620,37 @@ export const FleetDashboard: React.FC = () => {
                               </span>
                               <span className="font-bold text-on-surface">{tr.plateNumber}</span>
                               {tr.status === 'breakdown' ? (
-                                <span className="px-1.5 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px]">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (can('fleet:manage')) {
+                                      openStandaloneStatusModal('trailer', tr);
+                                    } else {
+                                      toggleUnassignedExpanded(`trailer-${tr.id}`);
+                                    }
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-red-950 text-red-300 border border-red-500/60 text-[9px] font-bold hover:bg-red-900 transition-colors"
+                                  title={can('fleet:manage') ? "Cliquer pour gérer la panne de la remorque" : "Remorque en panne"}
+                                >
                                   Panne
-                                </span>
+                                </button>
                               ) : tr.status === 'maintenance' ? (
-                                <span className="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-500/40 text-[9px]">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (can('fleet:manage')) {
+                                      openStandaloneStatusModal('trailer', tr);
+                                    } else {
+                                      toggleUnassignedExpanded(`trailer-${tr.id}`);
+                                    }
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/60 text-[9px] font-medium hover:bg-amber-900 transition-colors"
+                                  title={can('fleet:manage') ? "Cliquer pour gérer la maintenance de la remorque" : "Remorque en maintenance"}
+                                >
                                   Maintenance
-                                </span>
+                                </button>
                               ) : (
                                 <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-[#4edea3] border border-emerald-500/40 text-[9px]">
                                   Prête
