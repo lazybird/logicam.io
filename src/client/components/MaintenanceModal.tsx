@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Wrench, Truck, Loader2, Unlink } from 'lucide-react';
 import { api } from '../lib/api';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { SearchableSelect } from './SearchableSelect';
 import type { GarageDTO, VehicleStatus } from '../../shared/types';
 import type { BreakdownTargetPayload, BreakdownTargetScope } from './BreakdownModal';
 
@@ -203,50 +204,61 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
             </div>
           )}
 
-          {/* Type d'opération */}
-          <div className="flex flex-col gap-1.5">
-            <label
-              htmlFor="maintenance-type-select"
-              className="block font-mono text-xs text-on-surface-variant font-medium uppercase tracking-wider"
-            >
-              Motif de maintenance
-            </label>
-            <select
-              id="maintenance-type-select"
-              value={maintenanceType}
-              onChange={(e) => setMaintenanceType(e.target.value as any)}
-              className="w-full bg-[#020617] border border-[#334155] rounded-lg p-2.5 font-mono text-xs text-on-surface focus:outline-none focus:border-amber-500 transition-colors"
-            >
-              <option value="vidange">Vidange périodique (moteur / filtres)</option>
-              <option value="revision">Révision générale / Contrôle technique</option>
-              <option value="pneus">Changement / Permutation de pneumatiques</option>
-              <option value="autre">Autre révision préventive ou atelier</option>
-            </select>
-          </div>
+          {/* Type d'opération (SearchableSelect harmonisé) */}
+          <SearchableSelect
+            label="Motif de maintenance"
+            required
+            placeholder="Sélectionner le motif..."
+            options={[
+              {
+                id: 'vidange',
+                label: 'Vidange périodique',
+                subLabel: 'Moteur & filtres',
+                badge: 'RÉVISION',
+                badgeColor: 'blue',
+              },
+              {
+                id: 'revision',
+                label: 'Révision générale',
+                subLabel: 'Contrôle technique & organes',
+                badge: 'ATELIER',
+                badgeColor: 'amber',
+              },
+              {
+                id: 'pneus',
+                label: 'Pneumatiques',
+                subLabel: 'Changement ou permutation',
+                badge: 'TRAIN',
+                badgeColor: 'emerald',
+              },
+              {
+                id: 'autre',
+                label: 'Autre intervention',
+                subLabel: 'Travaux préventifs ou carrosserie',
+                badge: 'DIVERS',
+                badgeColor: 'gray',
+              },
+            ]}
+            value={maintenanceType}
+            onChange={(val) => setMaintenanceType(val as any)}
+          />
 
-          {/* Garage partenaire (optionnel) */}
+          {/* Garage partenaire (SearchableSelect harmonisé) */}
           {garages.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="maintenance-garage-select"
-                className="block font-mono text-xs text-on-surface-variant font-medium uppercase tracking-wider"
-              >
-                Garage / Atelier assigné
-              </label>
-              <select
-                id="maintenance-garage-select"
-                value={selectedGarageId}
-                onChange={(e) => setSelectedGarageId(e.target.value)}
-                className="w-full bg-[#020617] border border-[#334155] rounded-lg p-2.5 font-mono text-xs text-on-surface focus:outline-none focus:border-amber-500 transition-colors"
-              >
-                <option value="">Sélectionner un atelier (optionnel)</option>
-                {garages.map((gar) => (
-                  <option key={gar.id} value={gar.id}>
-                    {gar.name} {gar.location ? `— ${gar.location}` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SearchableSelect
+              label="Garage / Atelier assigné"
+              placeholder="Sélectionner un atelier..."
+              emptyMessage="Aucun garage trouvé"
+              options={garages.map((gar) => ({
+                id: gar.id,
+                label: gar.name,
+                subLabel: gar.location || undefined,
+                badge: gar.contactPhone ? 'TEL' : undefined,
+                badgeColor: 'blue',
+              }))}
+              value={selectedGarageId}
+              onChange={(val) => setSelectedGarageId(val)}
+            />
           )}
 
           {/* Précisions / Notes */}

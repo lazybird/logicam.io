@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, AlertTriangle, Truck, Loader2, Unlink } from 'lucide-react';
 import { api } from '../lib/api';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { SearchableSelect, type SearchableSelectOption } from './SearchableSelect';
 import type { BreakdownCategoryDTO, VehicleStatus } from '../../shared/types';
 
 export type BreakdownTargetScope = 'tractor' | 'trailer' | 'both';
@@ -225,29 +226,34 @@ export const BreakdownModal: React.FC<BreakdownModalProps> = ({
             </div>
           )}
 
-          {/* Catégorie de panne */}
+          {/* Catégorie de panne (SearchableSelect harmonisé) */}
           {categories.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="breakdown-category-select"
-                className="block font-mono text-xs text-on-surface-variant font-medium uppercase tracking-wider"
-              >
-                Type d'anomalie / Catégorie
-              </label>
-              <select
-                id="breakdown-category-select"
-                value={selectedCategoryId}
-                onChange={(e) => setSelectedCategoryId(e.target.value)}
-                className="w-full bg-[#020617] border border-[#334155] rounded-lg p-2.5 font-mono text-xs text-on-surface focus:outline-none focus:border-red-500 transition-colors"
-              >
-                <option value="">Sélectionner une catégorie (optionnel)</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name} ({cat.severity.toUpperCase()})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SearchableSelect
+              label="Type d'anomalie / Catégorie"
+              placeholder="Sélectionner une catégorie..."
+              emptyMessage="Aucune catégorie correspondante"
+              options={categories.map((cat) => {
+                const severityUpper = (cat.severity || 'medium').toUpperCase();
+                const badgeColor =
+                  severityUpper === 'CRITICAL'
+                    ? 'amber'
+                    : severityUpper === 'HIGH'
+                    ? 'amber'
+                    : severityUpper === 'LOW'
+                    ? 'emerald'
+                    : 'blue';
+
+                return {
+                  id: cat.id,
+                  label: cat.name,
+                  badge: severityUpper,
+                  badgeColor,
+                  subLabel: `Code: ${cat.code}`,
+                };
+              })}
+              value={selectedCategoryId}
+              onChange={(val) => setSelectedCategoryId(val)}
+            />
           )}
 
           {/* Notes / Description */}
