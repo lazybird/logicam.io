@@ -179,6 +179,24 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
+    // 13. DRIVERS / CHAUFFEURS
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS drivers (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        full_name TEXT NOT NULL,
+        phone TEXT,
+        license_number TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS drivers_org_fullname_unique_idx 
+        ON drivers(organization_id, full_name);
+      
+      -- Clé étrangère et colonne driver_id sur couplings si absente
+      ALTER TABLE couplings ADD COLUMN IF NOT EXISTS driver_id UUID REFERENCES drivers(id) ON DELETE SET NULL;
+    `);
+
     await client.query('COMMIT');
     console.log('✅ Schéma PostgreSQL vérifié et à jour.');
   } catch (err) {

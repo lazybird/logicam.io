@@ -93,11 +93,24 @@ export interface CouplingRowDTO {
   trailerType: string;
   tractorStatus: VehicleStatus;
   trailerStatus: VehicleStatus;
+  driverId?: string | null;
   driverName: string | null;
   isActive: boolean;
   coupledAt: string;
   uncoupledAt: string | null;
   createdById: string | null;
+}
+
+export interface DriverDTO {
+  id: string;
+  organizationId: string;
+  fullName: string;
+  phone?: string | null;
+  licenseNumber?: string | null;
+  status: 'active' | 'inactive';
+  isAssigned?: boolean;
+  currentCouplingId?: string | null;
+  createdAt: string;
 }
 
 export interface FleetKpiDTO {

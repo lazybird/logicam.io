@@ -26,6 +26,7 @@ import { UncoupleModal } from '../components/UncoupleModal';
 import { StatusChangeModal } from '../components/StatusChangeModal';
 import { IncidentHistoryModal } from '../components/IncidentHistoryModal';
 import type { BreakdownTargetPayload, BreakdownTargetScope } from '../components/BreakdownModal';
+import { SearchableSelect, type SearchableSelectOption } from '../components/SearchableSelect';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import type {
   CouplingRowDTO,
@@ -37,6 +38,7 @@ import type {
   BreakdownCategoryDTO,
   GarageDTO,
   IncidentDTO,
+  DriverDTO,
 } from '../../shared/types';
 
 interface FleetApiResponse {
@@ -51,6 +53,7 @@ interface FleetApiResponse {
   breakdownCategories?: BreakdownCategoryDTO[];
   garages?: GarageDTO[];
   incidents?: IncidentDTO[];
+  drivers?: DriverDTO[];
 }
 
 export const FleetDashboard: React.FC = () => {
@@ -122,7 +125,7 @@ export const FleetDashboard: React.FC = () => {
   const [newModel, setNewModel] = useState('');
   const [newTrailerType, setNewTrailerType] = useState<TrailerType>('BENNE');
   const [newTrailerPlate, setNewTrailerPlate] = useState('');
-  const [newDriverName, setNewDriverName] = useState('');
+  const [newDriverId, setNewDriverId] = useState('');
   const [isSubmittingVehicle, setIsSubmittingVehicle] = useState(false);
 
   useEscapeKey(isAddVehicleOpen, () => setIsAddVehicleOpen(false));
@@ -305,7 +308,7 @@ export const FleetDashboard: React.FC = () => {
     setNewPlate('');
     setNewModel('');
     setNewTrailerPlate('');
-    setNewDriverName('');
+    setNewDriverId('');
     setNewTrailerType('BENNE');
   };
 
@@ -349,10 +352,12 @@ export const FleetDashboard: React.FC = () => {
         });
 
         // 3. Atteler directement les deux
+        const matchedDriver = (data?.drivers || []).find((d) => d.id === newDriverId);
         await api.post('/api/fleet/couple', {
           tractorId: createdTractor.id,
           trailerId: createdTrailer.id,
-          driverName: newDriverName.trim() || undefined,
+          driverId: matchedDriver?.id || undefined,
+          driverName: matchedDriver ? matchedDriver.fullName : undefined,
         });
       }
 
@@ -495,23 +500,34 @@ export const FleetDashboard: React.FC = () => {
         {/* KPI 1 : En service */}
         <div
           onClick={() => {
-            setActiveTab('couplings');
             setOilDueFilterOnly(false);
-            setStatusFilter((prev) => (prev === 'in_service' && !oilDueFilterOnly ? 'ALL' : 'in_service'));
+            if (activeTab === 'couplings') {
+              setStatusFilter((prev) => (prev === 'in_service' && !oilDueFilterOnly ? 'ALL' : 'in_service'));
+            } else {
+              setUnassignedStatusFilter((prev) => (prev === 'in_service' ? 'ALL' : 'in_service'));
+            }
           }}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              setActiveTab('couplings');
               setOilDueFilterOnly(false);
-              setStatusFilter((prev) => (prev === 'in_service' && !oilDueFilterOnly ? 'ALL' : 'in_service'));
+              if (activeTab === 'couplings') {
+                setStatusFilter((prev) => (prev === 'in_service' && !oilDueFilterOnly ? 'ALL' : 'in_service'));
+              } else {
+                setUnassignedStatusFilter((prev) => (prev === 'in_service' ? 'ALL' : 'in_service'));
+              }
             }
           }}
-          title="Cliquer pour afficher les attelages en service"
+          title={
+            activeTab === 'couplings'
+              ? "Cliquer pour afficher les attelages en service"
+              : "Cliquer pour afficher les véhicules non attelés prêts"
+          }
           className={`bg-surface border rounded p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-all hover:bg-surface-variant/40 hover:border-[#4edea3]/50 select-none ${
-            statusFilter === 'in_service' && !oilDueFilterOnly
+            ((activeTab === 'couplings' && statusFilter === 'in_service' && !oilDueFilterOnly) ||
+             (activeTab === 'unassigned' && unassignedStatusFilter === 'in_service'))
               ? 'border-[#4edea3] ring-1 ring-[#4edea3]/40 shadow-[0_0_15px_rgba(78,222,163,0.15)]'
               : 'border-[#334155]'
           }`}
@@ -520,7 +536,8 @@ export const FleetDashboard: React.FC = () => {
           <div className="font-mono text-xs uppercase tracking-wider text-on-surface-variant flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <span>Camions en service</span>
-              {statusFilter === 'in_service' && !oilDueFilterOnly && (
+              {((activeTab === 'couplings' && statusFilter === 'in_service' && !oilDueFilterOnly) ||
+                (activeTab === 'unassigned' && unassignedStatusFilter === 'in_service')) && (
                 <span className="text-[10px] px-1 rounded bg-[#4edea3]/20 text-[#4edea3] lowercase font-sans">
                   filtre actif
                 </span>
@@ -540,23 +557,34 @@ export const FleetDashboard: React.FC = () => {
         {/* KPI 2 : En panne */}
         <div
           onClick={() => {
-            setActiveTab('couplings');
             setOilDueFilterOnly(false);
-            setStatusFilter((prev) => (prev === 'breakdown' && !oilDueFilterOnly ? 'ALL' : 'breakdown'));
+            if (activeTab === 'couplings') {
+              setStatusFilter((prev) => (prev === 'breakdown' && !oilDueFilterOnly ? 'ALL' : 'breakdown'));
+            } else {
+              setUnassignedStatusFilter((prev) => (prev === 'breakdown' ? 'ALL' : 'breakdown'));
+            }
           }}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              setActiveTab('couplings');
               setOilDueFilterOnly(false);
-              setStatusFilter((prev) => (prev === 'breakdown' && !oilDueFilterOnly ? 'ALL' : 'breakdown'));
+              if (activeTab === 'couplings') {
+                setStatusFilter((prev) => (prev === 'breakdown' && !oilDueFilterOnly ? 'ALL' : 'breakdown'));
+              } else {
+                setUnassignedStatusFilter((prev) => (prev === 'breakdown' ? 'ALL' : 'breakdown'));
+              }
             }
           }}
-          title="Cliquer pour afficher les attelages en panne"
+          title={
+            activeTab === 'couplings'
+              ? "Cliquer pour afficher les attelages en panne"
+              : "Cliquer pour afficher les véhicules non attelés en panne"
+          }
           className={`bg-surface border rounded p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-all hover:bg-surface-variant/40 hover:border-red-500/50 select-none ${
-            statusFilter === 'breakdown' && !oilDueFilterOnly
+            ((activeTab === 'couplings' && statusFilter === 'breakdown' && !oilDueFilterOnly) ||
+             (activeTab === 'unassigned' && unassignedStatusFilter === 'breakdown'))
               ? 'border-red-500 ring-1 ring-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.15)]'
               : 'border-[#334155]'
           }`}
@@ -565,7 +593,8 @@ export const FleetDashboard: React.FC = () => {
           <div className="font-mono text-xs uppercase tracking-wider text-on-surface-variant flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <span>En panne</span>
-              {statusFilter === 'breakdown' && !oilDueFilterOnly && (
+              {((activeTab === 'couplings' && statusFilter === 'breakdown' && !oilDueFilterOnly) ||
+                (activeTab === 'unassigned' && unassignedStatusFilter === 'breakdown')) && (
                 <span className="text-[10px] px-1 rounded bg-red-950 text-red-300 border border-red-500/40 lowercase font-sans">
                   filtre actif
                 </span>
@@ -581,47 +610,64 @@ export const FleetDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* KPI 3 : Vidanges prévues */}
+        {/* KPI 3 : En maintenance */}
         <div
           onClick={() => {
-            setActiveTab('couplings');
-            setStatusFilter('ALL');
-            setOilDueFilterOnly((prev) => !prev);
+            setOilDueFilterOnly(false);
+            if (activeTab === 'couplings') {
+              setStatusFilter((prev) => (prev === 'maintenance' && !oilDueFilterOnly ? 'ALL' : 'maintenance'));
+            } else {
+              setUnassignedStatusFilter((prev) => (prev === 'maintenance' ? 'ALL' : 'maintenance'));
+            }
           }}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              setActiveTab('couplings');
-              setStatusFilter('ALL');
-              setOilDueFilterOnly((prev) => !prev);
+              setOilDueFilterOnly(false);
+              if (activeTab === 'couplings') {
+                setStatusFilter((prev) => (prev === 'maintenance' && !oilDueFilterOnly ? 'ALL' : 'maintenance'));
+              } else {
+                setUnassignedStatusFilter((prev) => (prev === 'maintenance' ? 'ALL' : 'maintenance'));
+              }
             }
           }}
-          title="Cliquer pour filtrer les camions nécessitant une vidange sous 5 000 km"
-          className={`bg-surface border rounded p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-all hover:bg-surface-variant/40 hover:border-[#ff8c00]/50 select-none ${
-            oilDueFilterOnly
-              ? 'border-[#ff8c00] ring-1 ring-[#ff8c00]/40 shadow-[0_0_15px_rgba(255,140,0,0.15)]'
+          title={
+            activeTab === 'couplings'
+              ? "Cliquer pour afficher les attelages en maintenance"
+              : "Cliquer pour afficher les véhicules non attelés en maintenance"
+          }
+          className={`bg-surface border rounded p-4 flex flex-col gap-1.5 relative overflow-hidden cursor-pointer transition-all hover:bg-surface-variant/40 hover:border-amber-500/50 select-none ${
+            ((activeTab === 'couplings' && statusFilter === 'maintenance' && !oilDueFilterOnly) ||
+             (activeTab === 'unassigned' && unassignedStatusFilter === 'maintenance'))
+              ? 'border-amber-500 ring-1 ring-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
               : 'border-[#334155]'
           }`}
         >
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff8c00]"></div>
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>
           <div className="font-mono text-xs uppercase tracking-wider text-on-surface-variant flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <span>Vidanges Prévues</span>
-              {oilDueFilterOnly && (
+              <span>En maintenance</span>
+              {((activeTab === 'couplings' && statusFilter === 'maintenance' && !oilDueFilterOnly) ||
+                (activeTab === 'unassigned' && unassignedStatusFilter === 'maintenance')) && (
                 <span className="text-[10px] px-1 rounded bg-amber-950 text-amber-300 border border-amber-500/40 lowercase font-sans">
                   filtre actif
                 </span>
               )}
             </span>
-            <Wrench className="w-4 h-4 text-[#ff8c00]" />
+            <Wrench className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="font-mono text-3xl font-bold text-[#ffb77d]">
-            {data?.kpis.oilChangesDueCount ?? 0}
+          <div className="font-mono text-3xl font-bold text-amber-300">
+            {data?.kpis.maintenanceCouplings ?? 0}
           </div>
-          <div className="font-mono text-[11px] text-on-surface-variant">
-            Échéance sous 5 000 km
+          <div className="font-mono text-[11px] text-on-surface-variant flex items-center justify-between">
+            <span>Intervention atelier prévue / en cours</span>
+            {(data?.kpis.oilChangesDueCount ?? 0) > 0 && (
+              <span className="text-amber-400/90 text-[10px] font-sans" title="Vidange à prévoir sous 5 000 km">
+                ({data?.kpis.oilChangesDueCount} vidange{(data?.kpis.oilChangesDueCount ?? 0) > 1 ? 's' : ''})
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -1876,6 +1922,7 @@ export const FleetDashboard: React.FC = () => {
           onClose={() => setIsCouplingModalOpen(false)}
           tractors={data?.tractors || []}
           trailers={data?.trailers || []}
+          drivers={data?.drivers || []}
           onSuccess={loadFleet}
           initialTractorId={preselectedTractorId}
           initialTrailerId={preselectedTrailerId}
@@ -2071,19 +2118,40 @@ export const FleetDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Chauffeur (optionnel) */}
-                  <div className="flex flex-col gap-1.5">
-                    <label className="uppercase text-on-surface text-[10px]">
-                      Chauffeur assigné (optionnel)
-                    </label>
-                    <input
-                      type="text"
-                      value={newDriverName}
-                      onChange={(e) => setNewDriverName(e.target.value)}
-                      placeholder="Ex: Moussa Traoré"
-                      className="bg-[#020617] border border-[#334155] rounded py-1.5 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
-                    />
-                  </div>
+                  {/* Chauffeur (optionnel) avec recherche et ajout à la volée */}
+                  <SearchableSelect
+                    label="Chauffeur assigné (optionnel)"
+                    options={(data?.drivers || []).map((d) => ({
+                      id: d.id,
+                      label: d.fullName,
+                      badge: d.isAssigned ? 'En mission' : 'DISPO',
+                      badgeColor: d.isAssigned ? 'amber' : 'emerald',
+                      subLabel: d.phone ? `Tél: ${d.phone}` : undefined,
+                    }))}
+                    value={newDriverId}
+                    onChange={(val) => setNewDriverId(val)}
+                    placeholder="Sélectionner ou saisir un chauffeur..."
+                    emptyMessage="Aucun chauffeur trouvé. Vous pouvez l'ajouter ci-dessus."
+                    allowCreate
+                    createLabel="Ajouter nouveau chauffeur"
+                    onCreateNew={async (name) => {
+                      const res = await api.post<DriverDTO>('/api/fleet/drivers', { fullName: name });
+                      setData((prev) => {
+                        if (!prev) return prev;
+                        const list = prev.drivers || [];
+                        if (list.some((d) => d.id === res.id)) return prev;
+                        return { ...prev, drivers: [...list, res] };
+                      });
+                      return res.id;
+                    }}
+                    warningNotice={
+                      (data?.drivers || []).find((d) => d.id === newDriverId)?.isAssigned ? (
+                        <span className="text-amber-400 font-sans text-[11px] normal-case">
+                          ⚠️ Déjà en mission
+                        </span>
+                      ) : undefined
+                    }
+                  />
                 </>
               ) : (
                 <>
