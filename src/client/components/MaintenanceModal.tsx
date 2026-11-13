@@ -41,34 +41,36 @@ export const MaintenanceModal: React.FC<MaintenanceModalProps> = ({
     setError(null);
 
     try {
+      const typeLabel =
+        maintenanceType === 'vidange'
+          ? 'Vidange moteur'
+          : maintenanceType === 'revision'
+          ? 'Révision périodique'
+          : maintenanceType === 'pneus'
+          ? 'Changement / permutation pneumatiques'
+          : 'Maintenance générale';
+
+      const combinedNotes = notes.trim()
+        ? `[${typeLabel}] ${notes.trim()}`
+        : `[${typeLabel}]`;
+
       if (isCoupling) {
-        // 1. Mettre à jour le statut du tracteur si concerné
-        if (targetScope === 'tractor' || targetScope === 'both') {
-          await api.patch(`/api/fleet/tractors/${target.tractorId}`, {
-            status: 'maintenance',
-          });
-        }
-
-        // 2. Mettre à jour le statut de la remorque si concernée
-        if (targetScope === 'trailer' || targetScope === 'both') {
-          await api.patch(`/api/fleet/trailers/${target.trailerId}`, {
-            status: 'maintenance',
-          });
-        }
-
-        // 3. Si désattelage immédiat demandé (ex: remorque reste au dépôt pendant que tracteur est en atelier)
-        if (uncoupleImmediately) {
-          await api.post(`/api/fleet/couplings/${target.id}/uncouple`);
-        }
+        await api.post('/api/fleet/incidents', {
+          type: 'maintenance',
+          tractorId: targetScope === 'tractor' || targetScope === 'both' ? target.tractorId : null,
+          trailerId: targetScope === 'trailer' || targetScope === 'both' ? target.trailerId : null,
+          couplingId: target.id,
+          garageId: selectedGarageId || null,
+          notes: combinedNotes,
+          uncoupleImmediately,
+        });
       } else {
-        // Véhicule isolé non attelé
-        const endpoint =
-          target.vehicleType === 'tractor'
-            ? `/api/fleet/tractors/${target.id}`
-            : `/api/fleet/trailers/${target.id}`;
-
-        await api.patch(endpoint, {
-          status: 'maintenance',
+        await api.post('/api/fleet/incidents', {
+          type: 'maintenance',
+          tractorId: target.vehicleType === 'tractor' ? target.id : null,
+          trailerId: target.vehicleType === 'trailer' ? target.id : null,
+          garageId: selectedGarageId || null,
+          notes: combinedNotes,
         });
       }
 

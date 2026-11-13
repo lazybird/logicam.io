@@ -28,6 +28,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   couplings: many(couplings),
   breakdownCategories: many(breakdownCategories),
   garages: many(garages),
+  incidents: many(incidents),
 }));
 
 // -------------------------------------------------------------
@@ -278,10 +279,63 @@ export const breakdownCategories = pgTable('breakdown_categories', {
   severity: text('severity').notNull().default('high'),
 });
 
-export const breakdownCategoriesRelations = relations(breakdownCategories, ({ one }) => ({
+export const breakdownCategoriesRelations = relations(breakdownCategories, ({ one, many }) => ({
   organization: one(organizations, {
     fields: [breakdownCategories.organizationId],
     references: [organizations.id],
+  }),
+  incidents: many(incidents),
+}));
+
+// -------------------------------------------------------------
+// INCIDENTS / PANNES & MAINTENANCES (INCIDENTS)
+// -------------------------------------------------------------
+export const incidents = pgTable('incidents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  type: text('type').notNull().default('breakdown'), // 'breakdown' | 'maintenance'
+  tractorId: uuid('tractor_id').references(() => tractors.id, { onDelete: 'cascade' }),
+  trailerId: uuid('trailer_id').references(() => trailers.id, { onDelete: 'cascade' }),
+  couplingId: uuid('coupling_id').references(() => couplings.id, { onDelete: 'set null' }),
+  categoryId: uuid('category_id').references(() => breakdownCategories.id, { onDelete: 'set null' }),
+  garageId: uuid('garage_id').references(() => garages.id, { onDelete: 'set null' }),
+  reportedById: uuid('reported_by_id').references(() => users.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  status: text('status').notNull().default('open'), // 'open' | 'resolved'
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const incidentsRelations = relations(incidents, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [incidents.organizationId],
+    references: [organizations.id],
+  }),
+  tractor: one(tractors, {
+    fields: [incidents.tractorId],
+    references: [tractors.id],
+  }),
+  trailer: one(trailers, {
+    fields: [incidents.trailerId],
+    references: [trailers.id],
+  }),
+  coupling: one(couplings, {
+    fields: [incidents.couplingId],
+    references: [couplings.id],
+  }),
+  category: one(breakdownCategories, {
+    fields: [incidents.categoryId],
+    references: [breakdownCategories.id],
+  }),
+  garage: one(garages, {
+    fields: [incidents.garageId],
+    references: [garages.id],
+  }),
+  reportedBy: one(users, {
+    fields: [incidents.reportedById],
+    references: [users.id],
   }),
 }));
 

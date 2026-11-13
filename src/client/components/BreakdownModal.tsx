@@ -63,33 +63,24 @@ export const BreakdownModal: React.FC<BreakdownModalProps> = ({
 
     try {
       if (isCoupling) {
-        // 1. Mettre à jour le statut du tracteur si concerné
-        if (targetScope === 'tractor' || targetScope === 'both') {
-          await api.patch(`/api/fleet/tractors/${target.tractorId}`, {
-            status: 'breakdown',
-          });
-        }
-
-        // 2. Mettre à jour le statut de la remorque si concernée
-        if (targetScope === 'trailer' || targetScope === 'both') {
-          await api.patch(`/api/fleet/trailers/${target.trailerId}`, {
-            status: 'breakdown',
-          });
-        }
-
-        // 3. Si désattelage immédiat demandé (ex: remorque en panne laissée sur place)
-        if (uncoupleImmediately) {
-          await api.post(`/api/fleet/couplings/${target.id}/uncouple`);
-        }
+        // Enregistrer l'incident panne avec persistance
+        await api.post('/api/fleet/incidents', {
+          type: 'breakdown',
+          tractorId: targetScope === 'tractor' || targetScope === 'both' ? target.tractorId : null,
+          trailerId: targetScope === 'trailer' || targetScope === 'both' ? target.trailerId : null,
+          couplingId: target.id,
+          categoryId: selectedCategoryId || null,
+          notes: notes.trim() || null,
+          uncoupleImmediately,
+        });
       } else {
         // Véhicule isolé non attelé
-        const endpoint =
-          target.vehicleType === 'tractor'
-            ? `/api/fleet/tractors/${target.id}`
-            : `/api/fleet/trailers/${target.id}`;
-
-        await api.patch(endpoint, {
-          status: 'breakdown',
+        await api.post('/api/fleet/incidents', {
+          type: 'breakdown',
+          tractorId: target.vehicleType === 'tractor' ? target.id : null,
+          trailerId: target.vehicleType === 'trailer' ? target.id : null,
+          categoryId: selectedCategoryId || null,
+          notes: notes.trim() || null,
         });
       }
 

@@ -119,6 +119,27 @@ export interface BreakdownCategoryDTO {
   severity: string;
 }
 
+export interface IncidentDTO {
+  id: string;
+  organizationId: string;
+  type: 'breakdown' | 'maintenance';
+  tractorId: string | null;
+  trailerId: string | null;
+  couplingId: string | null;
+  categoryId: string | null;
+  garageId: string | null;
+  reportedById: string | null;
+  notes: string | null;
+  status: 'open' | 'resolved';
+  resolvedAt: string | null;
+  createdAt: string;
+  category?: BreakdownCategoryDTO | null;
+  garage?: GarageDTO | null;
+  reportedByName?: string | null;
+  tractorPlate?: string | null;
+  trailerPlate?: string | null;
+}
+
 export interface GarageDTO {
   id: string;
   organizationId: string;

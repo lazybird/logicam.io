@@ -156,6 +156,25 @@ export async function ensureSchema(): Promise<void> {
       );
     `);
 
+    // 12. INCIDENTS / PANNES & MAINTENANCES
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS incidents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        type TEXT NOT NULL DEFAULT 'breakdown',
+        tractor_id UUID REFERENCES tractors(id) ON DELETE CASCADE,
+        trailer_id UUID REFERENCES trailers(id) ON DELETE CASCADE,
+        coupling_id UUID REFERENCES couplings(id) ON DELETE SET NULL,
+        category_id UUID REFERENCES breakdown_categories(id) ON DELETE SET NULL,
+        garage_id UUID REFERENCES garages(id) ON DELETE SET NULL,
+        reported_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'open',
+        resolved_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
     await client.query('COMMIT');
     console.log('✅ Schéma PostgreSQL vérifié et à jour.');
   } catch (err) {

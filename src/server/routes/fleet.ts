@@ -1,7 +1,15 @@
 import { Hono } from 'hono';
-import { eq, and, sql, or } from 'drizzle-orm';
+import { eq, and, sql, or, desc } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tractors, trailers, couplings, breakdownCategories, garages } from '../db/schema.js';
+import {
+  tractors,
+  trailers,
+  couplings,
+  breakdownCategories,
+  garages,
+  incidents,
+  users,
+} from '../db/schema.js';
 import { parseTrucksExcelFile } from '../services/excelImporter.js';
 import {
   authMiddleware,
@@ -17,6 +25,7 @@ import type {
   TrailerType,
   BreakdownCategoryDTO,
   GarageDTO,
+  IncidentDTO,
 } from '../../shared/types.js';
 
 export const fleetRouter = new Hono<{ Variables: AuthContextVariables }>();
@@ -203,6 +212,83 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
     contactPhone: g.contactPhone,
   }));
 
+  // 3. Chargement des incidents actifs / récents
+  const recentIncidentsRaw = await db
+    .select({
+      id: incidents.id,
+      organizationId: incidents.organizationId,
+      type: incidents.type,
+      tractorId: incidents.tractorId,
+      trailerId: incidents.trailerId,
+      couplingId: incidents.couplingId,
+      categoryId: incidents.categoryId,
+      garageId: incidents.garageId,
+      reportedById: incidents.reportedById,
+      notes: incidents.notes,
+      status: incidents.status,
+      resolvedAt: incidents.resolvedAt,
+      createdAt: incidents.createdAt,
+      categoryName: breakdownCategories.name,
+      categoryCode: breakdownCategories.code,
+      categorySeverity: breakdownCategories.severity,
+      garageName: garages.name,
+      garageLocation: garages.location,
+      garageContactPhone: garages.contactPhone,
+      reporterFirstName: users.firstName,
+      reporterLastName: users.lastName,
+      tractorPlate: tractors.plateNumber,
+      trailerPlate: trailers.plateNumber,
+    })
+    .from(incidents)
+    .leftJoin(breakdownCategories, eq(incidents.categoryId, breakdownCategories.id))
+    .leftJoin(garages, eq(incidents.garageId, garages.id))
+    .leftJoin(users, eq(incidents.reportedById, users.id))
+    .leftJoin(tractors, eq(incidents.tractorId, tractors.id))
+    .leftJoin(trailers, eq(incidents.trailerId, trailers.id))
+    .where(eq(incidents.organizationId, effectiveOrgId))
+    .orderBy(desc(incidents.createdAt))
+    .limit(100);
+
+  const incidentsDTO: IncidentDTO[] = recentIncidentsRaw.map((inc) => ({
+    id: inc.id,
+    organizationId: inc.organizationId,
+    type: inc.type as 'breakdown' | 'maintenance',
+    tractorId: inc.tractorId,
+    trailerId: inc.trailerId,
+    couplingId: inc.couplingId,
+    categoryId: inc.categoryId,
+    garageId: inc.garageId,
+    reportedById: inc.reportedById,
+    notes: inc.notes,
+    status: inc.status as 'open' | 'resolved',
+    resolvedAt: inc.resolvedAt ? inc.resolvedAt.toISOString() : null,
+    createdAt: inc.createdAt.toISOString(),
+    tractorPlate: inc.tractorPlate,
+    trailerPlate: inc.trailerPlate,
+    reportedByName:
+      inc.reporterFirstName || inc.reporterLastName
+        ? `${inc.reporterFirstName || ''} ${inc.reporterLastName || ''}`.trim()
+        : null,
+    category: inc.categoryId
+      ? {
+          id: inc.categoryId,
+          organizationId: inc.organizationId,
+          name: inc.categoryName || '',
+          code: inc.categoryCode || '',
+          severity: inc.categorySeverity || 'high',
+        }
+      : null,
+    garage: inc.garageId
+      ? {
+          id: inc.garageId,
+          organizationId: inc.organizationId,
+          name: inc.garageName || '',
+          location: inc.garageLocation || null,
+          contactPhone: inc.garageContactPhone || null,
+        }
+      : null,
+  }));
+
   return c.json({
     kpis,
     couplings: couplingsDTO,
@@ -210,6 +296,7 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
     trailers: trailersDTO,
     breakdownCategories: breakdownCategoriesDTO,
     garages: garagesDTO,
+    incidents: incidentsDTO,
   });
 });
 
@@ -295,6 +382,20 @@ fleetRouter.patch('/tractors/:id', async (c) => {
     return c.json({ error: 'Tracteur introuvable dans cette organisation' }, 404);
   }
 
+  // Si remis en service ('in_service'), clôturer automatiquement les incidents ouverts sur ce tracteur
+  if (body.status === 'in_service') {
+    await db
+      .update(incidents)
+      .set({ status: 'resolved', resolvedAt: new Date() })
+      .where(
+        and(
+          eq(incidents.organizationId, effectiveOrgId),
+          eq(incidents.tractorId, id),
+          eq(incidents.status, 'open')
+        )
+      );
+  }
+
   return c.json({
     id: updated.id,
     organizationId: updated.organizationId,
@@ -375,6 +476,20 @@ fleetRouter.patch('/trailers/:id', async (c) => {
 
   if (!updated) {
     return c.json({ error: 'Remorque introuvable dans cette organisation' }, 404);
+  }
+
+  // Si remise en service ('in_service'), clôturer automatiquement les incidents ouverts sur cette remorque
+  if (body.status === 'in_service') {
+    await db
+      .update(incidents)
+      .set({ status: 'resolved', resolvedAt: new Date() })
+      .where(
+        and(
+          eq(incidents.organizationId, effectiveOrgId),
+          eq(incidents.trailerId, id),
+          eq(incidents.status, 'open')
+        )
+      );
   }
 
   return c.json({
@@ -468,6 +583,109 @@ fleetRouter.post('/couple', requireCapability('couplings:change'), async (c) => 
     uncoupledAt: null,
     createdById: newCoupling.createdById,
   });
+});
+
+/**
+ * Déclarer un incident (Panne ou Maintenance) avec persistance détaillée
+ */
+fleetRouter.post('/incidents', requireCapability('incidents:create'), async (c) => {
+  const effectiveOrgId = c.get('effectiveOrgId');
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => null);
+
+  if (!body) {
+    return c.json({ error: 'Données requises' }, 400);
+  }
+
+  const {
+    type = 'breakdown',
+    tractorId,
+    trailerId,
+    couplingId,
+    categoryId,
+    garageId,
+    notes,
+    uncoupleImmediately,
+  } = body;
+
+  if (!tractorId && !trailerId) {
+    return c.json({ error: 'Au moins un tracteur ou une remorque doit être spécifié' }, 400);
+  }
+
+  const newStatus = type === 'maintenance' ? 'maintenance' : 'breakdown';
+
+  // 1. Mettre à jour le statut du tracteur si spécifié
+  if (tractorId) {
+    await db
+      .update(tractors)
+      .set({ status: newStatus })
+      .where(and(eq(tractors.id, tractorId), eq(tractors.organizationId, effectiveOrgId)));
+  }
+
+  // 2. Mettre à jour le statut de la remorque si spécifiée
+  if (trailerId) {
+    await db
+      .update(trailers)
+      .set({ status: newStatus })
+      .where(and(eq(trailers.id, trailerId), eq(trailers.organizationId, effectiveOrgId)));
+  }
+
+  // 3. Si désattelage immédiat demandé
+  if (couplingId && uncoupleImmediately) {
+    await db
+      .update(couplings)
+      .set({ isActive: false, uncoupledAt: new Date() })
+      .where(and(eq(couplings.id, couplingId), eq(couplings.organizationId, effectiveOrgId)));
+  }
+
+  // 4. Insérer l'incident
+  const [newIncident] = await db
+    .insert(incidents)
+    .values({
+      organizationId: effectiveOrgId,
+      type,
+      tractorId: tractorId || null,
+      trailerId: trailerId || null,
+      couplingId: couplingId || null,
+      categoryId: categoryId || null,
+      garageId: garageId || null,
+      reportedById: user.id,
+      notes: notes ? String(notes).trim() : null,
+      status: 'open',
+    })
+    .returning();
+
+  return c.json({ success: true, incident: newIncident }, 201);
+});
+
+/**
+ * Résoudre un incident ou remettre un véhicule en service
+ */
+fleetRouter.patch('/incidents/:id/resolve', requireCapability('incidents:manage'), async (c) => {
+  const effectiveOrgId = c.get('effectiveOrgId');
+  const id = c.req.param('id');
+  if (!id) {
+    return c.json({ error: 'ID incident requis' }, 400);
+  }
+
+  const [incident] = await db
+    .select()
+    .from(incidents)
+    .where(and(eq(incidents.id, id), eq(incidents.organizationId, effectiveOrgId)))
+    .limit(1);
+
+  if (!incident) {
+    return c.json({ error: 'Incident introuvable' }, 404);
+  }
+
+  const now = new Date();
+  const [updated] = await db
+    .update(incidents)
+    .set({ status: 'resolved', resolvedAt: now })
+    .where(and(eq(incidents.id, id), eq(incidents.organizationId, effectiveOrgId)))
+    .returning();
+
+  return c.json({ success: true, incident: updated });
 });
 
 /**
