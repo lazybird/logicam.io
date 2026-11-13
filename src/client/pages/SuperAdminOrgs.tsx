@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import type { OrganizationDTO } from '../../shared/types';
 
 interface OrganizationItem extends OrganizationDTO {
@@ -59,6 +60,8 @@ export const SuperAdminOrgs: React.FC<SuperAdminOrgsProps> = ({ onManageOrg }) =
   const [adminPin, setAdminPin] = useState('1234');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEscapeKey(isCreateOpen, () => setIsCreateOpen(false));
 
   const loadData = async () => {
     setLoading(true);
@@ -345,7 +348,12 @@ export const SuperAdminOrgs: React.FC<SuperAdminOrgsProps> = ({ onManageOrg }) =
 
       {/* Modale Nouvelle Organisation */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsCreateOpen(false);
+          }}
+        >
           <div className="w-full max-w-md bg-surface border border-[#334155] rounded-xl overflow-hidden shadow-2xl">
             <div className="p-4 bg-surface-container border-b border-[#334155] flex justify-between items-center">
               <h2 className="font-mono text-sm font-bold text-on-surface flex items-center gap-2">

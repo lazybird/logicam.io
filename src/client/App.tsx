@@ -7,31 +7,32 @@ import { SuperAdminOrgs } from './pages/SuperAdminOrgs';
 import { OrgAdminPage } from './pages/OrgAdminPage';
 import { CouplingModal } from './components/CouplingModal';
 import { api } from './lib/api';
+import { useRouter } from './hooks/useRouter';
 import type { TractorDTO, TrailerDTO } from '../shared/types';
 
 export const App: React.FC = () => {
   const { user, isLoading } = useAuth();
   const { getPreference } = useTeamPolicy();
-  const [currentTab, setCurrentTab] = useState<NavTab>('fleet');
+  const { currentTab, setCurrentTab } = useRouter('fleet');
 
   // Modale globale d'attelage déclenchable depuis la sidebar
   const [isCouplingModalOpen, setIsCouplingModalOpen] = useState(false);
   const [tractors, setTractors] = useState<TractorDTO[]>([]);
   const [trailers, setTrailers] = useState<TrailerDTO[]>([]);
 
-  // Définir l'onglet par défaut au chargement selon les préférences d'équipe
+  // Définir l'onglet par défaut au chargement si aucune URL spécifique n'a été saisie
   useEffect(() => {
-    if (user) {
+    if (user && (window.location.pathname === '/' || window.location.pathname === '')) {
       if (user.role === 'SUPER_ADMIN') {
-        setCurrentTab('fleet');
+        setCurrentTab('fleet', true);
       } else {
         const prefView = getPreference('default_view');
         if (prefView === 'fleet' || prefView === 'dashboard') {
-          setCurrentTab('fleet');
+          setCurrentTab('fleet', true);
         }
       }
     }
-  }, [user, getPreference]);
+  }, [user, getPreference, setCurrentTab]);
 
   // Chargement des véhicules pour la modale globale d'attelage
   const loadFleetVehicles = async () => {

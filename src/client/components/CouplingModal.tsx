@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { X, Link2, Truck, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
 import type { TractorDTO, TrailerDTO } from '../../shared/types';
+import { SearchableSelect, type SearchableSelectOption } from './SearchableSelect';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface CouplingModalProps {
   isOpen: boolean;
@@ -28,6 +30,9 @@ export const CouplingModal: React.FC<CouplingModalProps> = ({
   const [orderNumber, setOrderNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fermeture par touche Échap
+  useEscapeKey(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -61,11 +66,33 @@ export const CouplingModal: React.FC<CouplingModalProps> = ({
   const selectedTractor = tractors.find((t) => t.id === selectedTractorId);
   const selectedTrailer = trailers.find((tr) => tr.id === selectedTrailerId);
 
+  // Préparation des options pour SearchableSelect
+  const tractorOptions: SearchableSelectOption[] = tractors.map((t) => ({
+    id: t.id,
+    label: t.plateNumber,
+    badge: t.isCoupled ? 'Attelé' : 'DISPO',
+    badgeColor: t.isCoupled ? 'amber' : 'emerald',
+    subLabel: t.brandModel || undefined,
+  }));
+
+  const trailerOptions: SearchableSelectOption[] = trailers.map((tr) => ({
+    id: tr.id,
+    label: tr.plateNumber,
+    badge: tr.isCoupled ? 'Attelée' : 'DISPO',
+    badgeColor: tr.isCoupled ? 'amber' : 'emerald',
+    subLabel: `Type: ${tr.trailerType}`,
+  }));
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-surface border border-[#334155] rounded-xl overflow-hidden shadow-2xl flex flex-col">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-lg bg-surface border border-[#334155] rounded-xl overflow-visible shadow-2xl flex flex-col">
         {/* En-tête */}
-        <div className="p-4 bg-surface-container border-b border-[#334155] flex justify-between items-center">
+        <div className="p-4 bg-surface-container border-b border-[#334155] rounded-t-xl flex justify-between items-center">
           <div className="flex items-center gap-2">
             <Link2 className="w-5 h-5 text-primary" />
             <h2 className="font-mono text-base font-bold text-on-surface">
@@ -90,57 +117,41 @@ export const CouplingModal: React.FC<CouplingModalProps> = ({
             </div>
           )}
 
-          {/* Sélection du Tracteur */}
-          <div className="flex flex-col gap-1.5">
-            <label className="font-mono text-xs uppercase tracking-wider text-on-surface flex justify-between">
-              <span>Tracteur</span>
-              {selectedTractor?.isCoupled && (
+          {/* Sélection du Tracteur avec Recherche et UX Mobile */}
+          <SearchableSelect
+            label="Tracteur"
+            required
+            options={tractorOptions}
+            value={selectedTractorId}
+            onChange={(val) => setSelectedTractorId(val)}
+            placeholder="Sélectionner ou rechercher un tracteur..."
+            emptyMessage="Aucun tracteur correspondant trouvé"
+            warningNotice={
+              selectedTractor?.isCoupled ? (
                 <span className="text-amber-400 font-sans text-[11px] normal-case">
                   ⚠️ Déjà attelé (sera réaffecté)
                 </span>
-              )}
-            </label>
-            <select
-              value={selectedTractorId}
-              onChange={(e) => setSelectedTractorId(e.target.value)}
-              required
-              className="bg-[#020617] border border-[#334155] rounded text-on-surface font-mono text-xs py-2.5 px-3 focus:outline-none focus:border-[#ff8c00]"
-            >
-              <option value="">Sélectionner un tracteur...</option>
-              {tractors.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.plateNumber} {t.brandModel ? `(${t.brandModel})` : ''} —{' '}
-                  {t.isCoupled ? 'Actuellement attelé' : 'DISPONIBLE'}
-                </option>
-              ))}
-            </select>
-          </div>
+              ) : undefined
+            }
+          />
 
-          {/* Sélection de la Remorque */}
-          <div className="flex flex-col gap-1.5">
-            <label className="font-mono text-xs uppercase tracking-wider text-on-surface flex justify-between">
-              <span>Remorque</span>
-              {selectedTrailer?.isCoupled && (
+          {/* Sélection de la Remorque avec Recherche et UX Mobile */}
+          <SearchableSelect
+            label="Remorque"
+            required
+            options={trailerOptions}
+            value={selectedTrailerId}
+            onChange={(val) => setSelectedTrailerId(val)}
+            placeholder="Sélectionner ou rechercher une remorque..."
+            emptyMessage="Aucune remorque correspondante trouvée"
+            warningNotice={
+              selectedTrailer?.isCoupled ? (
                 <span className="text-amber-400 font-sans text-[11px] normal-case">
                   ⚠️ Déjà attelée (sera réaffectée)
                 </span>
-              )}
-            </label>
-            <select
-              value={selectedTrailerId}
-              onChange={(e) => setSelectedTrailerId(e.target.value)}
-              required
-              className="bg-[#020617] border border-[#334155] rounded text-on-surface font-mono text-xs py-2.5 px-3 focus:outline-none focus:border-[#ff8c00]"
-            >
-              <option value="">Sélectionner une remorque...</option>
-              {trailers.map((tr) => (
-                <option key={tr.id} value={tr.id}>
-                  {tr.plateNumber} [{tr.trailerType}] —{' '}
-                  {tr.isCoupled ? 'Actuellement attelée' : 'DISPONIBLE'}
-                </option>
-              ))}
-            </select>
-          </div>
+              ) : undefined
+            }
+          />
 
           {/* Nom du Chauffeur */}
           <div className="flex flex-col gap-1.5">

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Unlink, AlertTriangle, Truck, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface UncoupleModalProps {
   isOpen: boolean;
@@ -19,6 +20,8 @@ export const UncoupleModal: React.FC<UncoupleModalProps> = ({
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEscapeKey(isOpen, onClose);
 
   if (!isOpen) return null;
 

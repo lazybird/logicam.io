@@ -16,6 +16,7 @@ import {
 import { api } from '../lib/api';
 import { useAuth, useTeamPolicy } from '../context/AuthContext';
 import { AVAILABLE_CAPABILITIES } from '../../shared/permissions';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import type {
   BreakdownCategoryDTO,
   Capability,
@@ -79,6 +80,10 @@ export const OrgAdminPage: React.FC = () => {
   const [isAddTeamOpen, setIsAddTeamOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamDesc, setNewTeamDesc] = useState('');
+
+  // Gestion de la touche Échap pour fermer les modales
+  useEscapeKey(isAddMemberOpen, () => setIsAddMemberOpen(false));
+  useEscapeKey(isAddTeamOpen, () => setIsAddTeamOpen(false));
 
   // Ajout Catégorie
   const [newCatName, setNewCatName] = useState('');
@@ -829,7 +834,12 @@ export const OrgAdminPage: React.FC = () => {
 
       {/* Modale Ajout Membre */}
       {isAddMemberOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAddMemberOpen(false);
+          }}
+        >
           <div className="w-full max-w-md bg-surface border border-[#334155] rounded-xl overflow-hidden shadow-2xl">
             <div className="p-4 bg-surface-container border-b border-[#334155] flex justify-between items-center">
               <h2 className="font-mono text-sm font-bold text-on-surface flex items-center gap-2">
@@ -956,7 +966,12 @@ export const OrgAdminPage: React.FC = () => {
 
       {/* Modale Nouvelle Équipe */}
       {isAddTeamOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAddTeamOpen(false);
+          }}
+        >
           <div className="w-full max-w-sm bg-surface border border-[#334155] rounded-xl overflow-hidden shadow-2xl">
             <div className="p-4 bg-surface-container border-b border-[#334155] flex justify-between items-center">
               <h2 className="font-mono text-sm font-bold text-on-surface">Créer une Équipe</h2>

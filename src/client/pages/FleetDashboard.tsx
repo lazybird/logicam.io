@@ -18,6 +18,7 @@ import { api } from '../lib/api';
 import { useAuth, useTeamPolicy } from '../context/AuthContext';
 import { CouplingModal } from '../components/CouplingModal';
 import { UncoupleModal } from '../components/UncoupleModal';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import type {
   CouplingRowDTO,
   FleetKpiDTO,
@@ -65,6 +66,8 @@ export const FleetDashboard: React.FC = () => {
   const [newPlate, setNewPlate] = useState('');
   const [newModel, setNewModel] = useState('');
   const [newTrailerType, setNewTrailerType] = useState<TrailerType>('BENNE');
+
+  useEscapeKey(isAddVehicleOpen, () => setIsAddVehicleOpen(false));
 
   // Import Excel
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -681,7 +684,12 @@ export const FleetDashboard: React.FC = () => {
 
       {/* Modale d'Ajout Rapide de Véhicule */}
       {isAddVehicleOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAddVehicleOpen(false);
+          }}
+        >
           <div className="w-full max-w-md bg-surface border border-[#334155] rounded-xl overflow-hidden shadow-2xl">
             <div className="p-4 bg-surface-container border-b border-[#334155] flex justify-between items-center">
               <h2 className="font-mono text-sm font-bold text-on-surface flex items-center gap-2">
