@@ -741,17 +741,43 @@ export const FleetDashboard: React.FC = () => {
                             </span>
                           </td>
 
-                          {/* Statut (Badge sur Desktop, sélecteur rapide directement accessible ou badge cliquable) */}
+                          {/* Statut (Badge propre, cliquable avec le reste de la ligne pour ouvrir l'accordéon) */}
+                          <td className="py-2 px-2 sm:px-3 whitespace-nowrap">
+                            {isBreakdown ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-950/50 text-[#ffb4ab] border border-red-500/40 text-[10px] font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#ffb4ab]"></span>
+                                <span>En Panne</span>
+                              </span>
+                            ) : isMaintenance ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-950/50 text-amber-300 border border-amber-500/40 text-[10px] font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-300"></span>
+                                <span>Maintenance</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/50 text-[#4edea3] border border-emerald-500/40 text-[10px] font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3]"></span>
+                                <span>En Service</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Kilométrage (Desktop uniquement) */}
+                          <td className="hidden md:table-cell py-2.5 px-3 text-right whitespace-nowrap">
+                            <div>{(row.mileageKm ?? 0).toLocaleString()} km</div>
+                            {oilDue && (
+                              <span className="text-[10px] text-amber-400 font-sans block">
+                                ⚠️ Vidange requise
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Actions (Desktop md+ uniquement : Changer statut + Désatteler) */}
                           <td
-                            className="py-2 px-2 sm:px-3 whitespace-nowrap"
-                            onClick={(e) => {
-                              // Sur desktop ou mobile, si on clique sur le sélecteur, on n'ouvre pas l'accordéon
-                              e.stopPropagation();
-                            }}
+                            className="hidden md:table-cell py-2.5 px-3 text-center whitespace-nowrap"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="flex items-center gap-1.5">
-                              {/* Sélecteur de statut natif direct et visible si l'utilisateur a les droits */}
-                              {can('fleet:manage') ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              {can('fleet:manage') && (
                                 <select
                                   value={
                                     row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown'
@@ -766,57 +792,15 @@ export const FleetDashboard: React.FC = () => {
                                       e.target.value as VehicleStatus
                                     )
                                   }
-                                  aria-label={`Statut de l'attelage ${row.orderNumber}`}
-                                  className={`border rounded text-[11px] font-mono py-1 px-1.5 sm:py-0.5 sm:px-2 focus:outline-none focus:ring-1 cursor-pointer font-medium transition-colors ${
-                                    isBreakdown
-                                      ? 'bg-red-950/60 border-red-500/60 text-red-300 focus:ring-red-400'
-                                      : isMaintenance
-                                      ? 'bg-amber-950/60 border-amber-500/60 text-amber-300 focus:ring-amber-400'
-                                      : 'bg-emerald-950/60 border-emerald-500/60 text-[#4edea3] focus:ring-emerald-400'
-                                  }`}
+                                  aria-label={`Changer statut de l'attelage ${row.orderNumber}`}
+                                  className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-0.5 px-1 focus:outline-none focus:border-[#ff8c00]"
                                 >
-                                  <option value="in_service" className="bg-[#020617] text-[#4edea3]">En Service</option>
-                                  <option value="breakdown" className="bg-[#020617] text-red-300">En Panne</option>
-                                  <option value="maintenance" className="bg-[#020617] text-amber-300">Maintenance</option>
+                                  <option value="in_service">En Service</option>
+                                  <option value="breakdown">En Panne</option>
+                                  <option value="maintenance">Maintenance</option>
                                 </select>
-                              ) : (
-                                /* Badge statique en lecture seule */
-                                isBreakdown ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-950/40 text-[#ffb4ab] border border-red-500/40 text-[10px]">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#ffb4ab]"></span>
-                                    <span>Panne</span>
-                                  </span>
-                                ) : isMaintenance ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950/40 text-amber-300 border border-amber-500/40 text-[10px]">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300"></span>
-                                    <span>Maint.</span>
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/40 text-[#4edea3] border border-emerald-500/40 text-[10px]">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3]"></span>
-                                    <span>Service</span>
-                                  </span>
-                                )
                               )}
-                            </div>
-                          </td>
 
-                          {/* Kilométrage (Desktop uniquement) */}
-                          <td className="hidden md:table-cell py-2.5 px-3 text-right whitespace-nowrap">
-                            <div>{(row.mileageKm ?? 0).toLocaleString()} km</div>
-                            {oilDue && (
-                              <span className="text-[10px] text-amber-400 font-sans block">
-                                ⚠️ Vidange requise
-                              </span>
-                            )}
-                          </td>
-
-                          {/* Actions (Desktop md+ uniquement : Désatteler) */}
-                          <td
-                            className="hidden md:table-cell py-2.5 px-3 text-center whitespace-nowrap"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div className="flex items-center justify-center">
                               {can('couplings:change') && (
                                 <button
                                   type="button"
