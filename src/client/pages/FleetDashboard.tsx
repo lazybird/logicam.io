@@ -843,90 +843,56 @@ export const FleetDashboard: React.FC = () => {
                                   </div>
                                 </div>
 
-                                {/* Actions Mobile : Gestion distincte Tracteur & Benne + Désattelage */}
+                                {/* Actions Mobile : Sélecteur de statut de l'attelage + Désattelage */}
                                 <div className="flex flex-col gap-2 pt-1 border-t border-[#334155]/50">
-                                  {/* Gestion séparée des statuts Tracteur & Benne */}
+                                  {/* Sélecteur unique du statut de l'attelage déclenchant la modale détaillée pour la panne / maintenance */}
                                   {can('fleet:manage') && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      {/* Action Tracteur */}
-                                      <div className="flex flex-col gap-1 p-2 rounded-lg bg-[#020617]/70 border border-[#334155]/60">
-                                        <div className="flex items-center justify-between text-[11px]">
-                                          <span className="text-on-surface-variant flex items-center gap-1">
-                                            <Truck className="w-3 h-3 text-[#ff8c00]" /> Tracteur :
-                                          </span>
-                                          <strong className="text-on-surface">{row.tractorPlate}</strong>
-                                        </div>
-                                        <select
-                                          value={row.tractorStatus}
-                                          onChange={(e) =>
-                                            handleStandaloneVehicleStatusChange(
-                                              'tractor',
-                                              {
-                                                id: row.tractorId,
-                                                organizationId: row.organizationId,
-                                                plateNumber: row.tractorPlate,
-                                                brandModel: row.tractorBrandModel || null,
-                                                status: row.tractorStatus,
-                                                mileageKm: row.mileageKm || 0,
-                                                nextOilChangeKm: row.nextOilChangeKm || null,
-                                                createdAt: row.coupledAt,
-                                              },
-                                              e.target.value as VehicleStatus
-                                            )
-                                          }
-                                          aria-label={`Statut du tracteur ${row.tractorPlate}`}
-                                          className={`w-full border rounded text-[11px] font-mono py-1.5 px-2 focus:outline-none focus:ring-1 cursor-pointer font-medium transition-colors ${
-                                            row.tractorStatus === 'breakdown'
-                                              ? 'bg-red-950/60 border-red-500/60 text-red-300'
-                                              : row.tractorStatus === 'maintenance'
-                                              ? 'bg-amber-950/60 border-amber-500/60 text-amber-300'
-                                              : 'bg-emerald-950/60 border-emerald-500/60 text-[#4edea3]'
-                                          }`}
-                                        >
-                                          <option value="in_service" className="bg-[#020617] text-[#4edea3]">Tracteur En Service</option>
-                                          <option value="breakdown" className="bg-[#020617] text-red-300">Tracteur En Panne</option>
-                                          <option value="maintenance" className="bg-[#020617] text-amber-300">Tracteur Maintenance</option>
-                                        </select>
+                                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#020617]/70 border border-[#334155]/60 gap-3">
+                                      <div className="flex flex-col">
+                                        <span className="text-[10px] uppercase font-mono tracking-wider text-on-surface-variant font-medium">
+                                          Statut de l'attelage
+                                        </span>
+                                        <span className="text-[11px] font-mono text-on-surface">
+                                          {isBreakdown
+                                            ? 'En Panne'
+                                            : isMaintenance
+                                            ? 'En Maintenance'
+                                            : 'En Service'}
+                                        </span>
                                       </div>
-
-                                      {/* Action Remorque / Benne */}
-                                      <div className="flex flex-col gap-1 p-2 rounded-lg bg-[#020617]/70 border border-[#334155]/60">
-                                        <div className="flex items-center justify-between text-[11px]">
-                                          <span className="text-on-surface-variant flex items-center gap-1">
-                                            <Truck className="w-3 h-3 text-[#4edea3]" /> Remorque ({row.trailerType}) :
-                                          </span>
-                                          <strong className="text-on-surface">{row.trailerPlate}</strong>
-                                        </div>
-                                        <select
-                                          value={row.trailerStatus}
-                                          onChange={(e) =>
-                                            handleStandaloneVehicleStatusChange(
-                                              'trailer',
-                                              {
-                                                id: row.trailerId,
-                                                organizationId: row.organizationId,
-                                                plateNumber: row.trailerPlate,
-                                                trailerType: row.trailerType as any,
-                                                status: row.trailerStatus,
-                                                createdAt: row.coupledAt,
-                                              },
-                                              e.target.value as VehicleStatus
-                                            )
-                                          }
-                                          aria-label={`Statut de la remorque ${row.trailerPlate}`}
-                                          className={`w-full border rounded text-[11px] font-mono py-1.5 px-2 focus:outline-none focus:ring-1 cursor-pointer font-medium transition-colors ${
-                                            row.trailerStatus === 'breakdown'
-                                              ? 'bg-red-950/60 border-red-500/60 text-red-300'
-                                              : row.trailerStatus === 'maintenance'
-                                              ? 'bg-amber-950/60 border-amber-500/60 text-amber-300'
-                                              : 'bg-emerald-950/60 border-emerald-500/60 text-[#4edea3]'
-                                          }`}
-                                        >
-                                          <option value="in_service" className="bg-[#020617] text-[#4edea3]">Remorque En Service</option>
-                                          <option value="breakdown" className="bg-[#020617] text-red-300">Remorque En Panne</option>
-                                          <option value="maintenance" className="bg-[#020617] text-amber-300">Remorque Maintenance</option>
-                                        </select>
-                                      </div>
+                                      <select
+                                        value={
+                                          row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown'
+                                            ? 'breakdown'
+                                            : row.tractorStatus === 'maintenance' || row.trailerStatus === 'maintenance'
+                                            ? 'maintenance'
+                                            : 'in_service'
+                                        }
+                                        onChange={(e) =>
+                                          handleStatusChangeRequest(
+                                            row,
+                                            e.target.value as VehicleStatus
+                                          )
+                                        }
+                                        aria-label={`Changer statut de l'attelage ${row.orderNumber}`}
+                                        className={`border rounded-lg text-xs font-mono py-2 px-3 focus:outline-none focus:ring-1 cursor-pointer font-medium transition-colors ${
+                                          row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown'
+                                            ? 'bg-red-950/60 border-red-500/60 text-red-300'
+                                            : row.tractorStatus === 'maintenance' || row.trailerStatus === 'maintenance'
+                                            ? 'bg-amber-950/60 border-amber-500/60 text-amber-300'
+                                            : 'bg-emerald-950/60 border-emerald-500/60 text-[#4edea3]'
+                                        }`}
+                                      >
+                                        <option value="in_service" className="bg-[#020617] text-[#4edea3]">
+                                          En Service
+                                        </option>
+                                        <option value="breakdown" className="bg-[#020617] text-red-300">
+                                          En Panne...
+                                        </option>
+                                        <option value="maintenance" className="bg-[#020617] text-amber-300">
+                                          Maintenance...
+                                        </option>
+                                      </select>
                                     </div>
                                   )}
 
