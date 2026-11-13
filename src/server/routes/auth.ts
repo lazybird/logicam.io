@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import { setCookie, deleteCookie, getCookie } from 'hono/cookie';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { db } from '../db/index.js';
 import { sessions, users, organizations } from '../db/schema.js';
-import { normalizePhone, verifyPin } from '../auth/pin.js';
+import { normalizePhone, getPhoneVariants, verifyPin } from '../auth/pin.js';
 import {
   authMiddleware,
   loadUserWithPolicy,
@@ -68,11 +68,15 @@ authRouter.post('/login', async (c) => {
     return c.json({ error: 'Téléphone et code PIN obligatoires' }, 400);
   }
 
-  const phone = normalizePhone(String(body.phone));
+  const phoneVariants = getPhoneVariants(String(body.phone));
   const pin = String(body.pin).trim();
 
-  // Recherche de l'utilisateur
-  const [userRecord] = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
+  // Recherche de l'utilisateur par l'une des variantes du numéro (national ou avec indicatif)
+  const [userRecord] = await db
+    .select()
+    .from(users)
+    .where(inArray(users.phone, phoneVariants))
+    .limit(1);
 
   if (!userRecord) {
     return c.json({ error: 'Identifiants invalides (numéro inconnu)' }, 401);

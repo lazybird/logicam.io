@@ -13,6 +13,8 @@ import {
   RefreshCw,
   PlusCircle,
   X,
+  Gauge,
+  User,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth, useTeamPolicy } from '../context/AuthContext';
@@ -234,6 +236,7 @@ export const FleetDashboard: React.FC = () => {
             disabled={loading}
             className="p-2 rounded border border-[#334155] hover:bg-surface-variant text-on-surface-variant hover:text-on-surface transition-colors"
             title="Rafraîchir"
+            aria-label="Rafraîchir l'état du parc"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -407,7 +410,7 @@ export const FleetDashboard: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto">
+            <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 scrollbar-none">
               {(
                 [
                   { id: 'ALL', label: 'Tous' },
@@ -432,8 +435,8 @@ export const FleetDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Table haute densité des attelages */}
-          <div className="overflow-x-auto flex-1">
+          {/* Table haute densité des attelages (Desktop & Tablettes md+) */}
+          <div className="hidden md:block overflow-x-auto flex-1">
             <table className="w-full text-left border-collapse font-mono text-xs">
               <thead className="sticky top-0 bg-surface-container-highest border-b border-[#334155] z-10">
                 <tr>
@@ -544,7 +547,8 @@ export const FleetDashboard: React.FC = () => {
                                     e.target.value as VehicleStatus
                                   )
                                 }
-                                className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-0.5 px-1 focus:outline-none"
+                                aria-label={`Statut de l'attelage ${row.orderNumber}`}
+                                className="bg-[#020617] border border-[#334155] rounded text-[10px] text-on-surface-variant py-0.5 px-1 focus:outline-none focus:border-[#ff8c00]"
                               >
                                 <option value="in_service">En Service</option>
                                 <option value="breakdown">En Panne</option>
@@ -559,6 +563,7 @@ export const FleetDashboard: React.FC = () => {
                                 onClick={() => handleUncouple(row.id)}
                                 className="p-1 rounded hover:bg-surface-variant text-on-surface-variant hover:text-red-400 transition-colors"
                                 title="Désatteler"
+                                aria-label={`Désatteler l'attelage ${row.orderNumber} (${row.tractorPlate} et ${row.trailerPlate})`}
                               >
                                 <Unlink className="w-4 h-4" />
                               </button>
@@ -571,6 +576,152 @@ export const FleetDashboard: React.FC = () => {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Vue Cartes Mobiles (Mobile < md) */}
+          <div className="md:hidden flex flex-col divide-y divide-[#334155]/60 bg-[#020617]/50">
+            {filteredCouplings.length === 0 ? (
+              <div className="py-12 px-4 text-center text-on-surface-variant text-xs font-mono">
+                Aucun attelage ne correspond aux critères de recherche.
+              </div>
+            ) : (
+              filteredCouplings.map((row) => {
+                const isBreakdown =
+                  row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown';
+                const isMaintenance =
+                  row.tractorStatus === 'maintenance' || row.trailerStatus === 'maintenance';
+
+                const oilDue =
+                  row.nextOilChangeKm != null &&
+                  row.mileageKm != null &&
+                  row.nextOilChangeKm - row.mileageKm <= 5000;
+
+                return (
+                  <article
+                    key={row.id}
+                    className="p-3.5 flex flex-col gap-3 bg-surface hover:bg-surface-variant/20 transition-colors"
+                    aria-labelledby={`card-order-${row.id}`}
+                  >
+                    {/* En-tête de carte : N° Ordre + Badge Statut + Type */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          id={`card-order-${row.id}`}
+                          className="font-mono text-sm font-bold text-[#ffb77d] tracking-wide"
+                        >
+                          {row.orderNumber}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-surface-container-high border border-[#334155] text-[10px] font-mono text-on-surface-variant uppercase">
+                          {row.trailerType}
+                        </span>
+                      </div>
+
+                      {/* Badge Statut */}
+                      {isBreakdown ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-red-950/40 text-[#ffb4ab] border border-red-500/40 text-[11px] font-mono font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#ffb4ab]"></span> En Panne
+                        </span>
+                      ) : isMaintenance ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-amber-950/40 text-amber-300 border border-amber-500/40 text-[11px] font-mono font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-300"></span> Maintenance
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-950/40 text-[#4edea3] border border-emerald-500/40 text-[11px] font-mono font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3]"></span> En Service
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Bloc Véhicules : Tracteur & Remorque */}
+                    <div className="grid grid-cols-2 gap-2 bg-[#020617] border border-[#334155]/60 rounded p-2.5">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase font-mono tracking-wider text-on-surface-variant flex items-center gap-1">
+                          <Truck className="w-3 h-3 text-[#ff8c00]" /> Tracteur
+                        </span>
+                        <span className="font-mono text-xs font-bold text-on-surface mt-0.5">
+                          {row.tractorPlate}
+                        </span>
+                        {row.tractorBrandModel && (
+                          <span className="text-[10px] text-on-surface-variant truncate">
+                            {row.tractorBrandModel}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col border-l border-[#334155]/60 pl-2.5">
+                        <span className="text-[10px] uppercase font-mono tracking-wider text-on-surface-variant flex items-center gap-1">
+                          <Truck className="w-3 h-3 text-[#4edea3]" /> Remorque
+                        </span>
+                        <span className="font-mono text-xs font-bold text-on-surface mt-0.5">
+                          {row.trailerPlate}
+                        </span>
+                        {row.driverName ? (
+                          <span className="text-[10px] text-on-surface-variant truncate flex items-center gap-1">
+                            <User className="w-2.5 h-2.5" /> {row.driverName}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-on-surface-variant/60 italic">Sans chauffeur</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Kilométrage & Alerte Vidange */}
+                    <div className="flex items-center justify-between text-xs font-mono px-1">
+                      <div className="flex items-center gap-1.5 text-on-surface-variant">
+                        <Gauge className="w-3.5 h-3.5 text-primary" />
+                        <span>{(row.mileageKm ?? 0).toLocaleString()} km</span>
+                      </div>
+                      {oilDue && (
+                        <span className="text-[11px] text-amber-400 font-sans flex items-center gap-1 font-medium bg-amber-950/30 px-2 py-0.5 rounded border border-amber-500/30">
+                          ⚠️ Vidange requise
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Barre d'Actions Mobile avec labels explicites */}
+                    <div className="pt-2 border-t border-[#334155]/60 flex items-center gap-2">
+                      {can('fleet:manage') && (
+                        <div className="flex-1">
+                          <label
+                            htmlFor={`status-select-${row.id}`}
+                            className="sr-only"
+                          >
+                            Changer le statut pour {row.orderNumber}
+                          </label>
+                          <select
+                            id={`status-select-${row.id}`}
+                            value={row.tractorStatus}
+                            onChange={(e) =>
+                              handleUpdateTractorStatus(
+                                row.tractorId,
+                                e.target.value as VehicleStatus
+                              )
+                            }
+                            className="w-full bg-[#020617] border border-[#334155] rounded py-2 px-2.5 font-mono text-xs text-on-surface focus:outline-none focus:border-[#ff8c00]"
+                          >
+                            <option value="in_service">En Service</option>
+                            <option value="breakdown">En Panne</option>
+                            <option value="maintenance">Maintenance</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {can('couplings:change') && (
+                        <button
+                          type="button"
+                          onClick={() => handleUncouple(row.id)}
+                          className="flex items-center justify-center gap-2 py-2 px-3 rounded border border-red-500/40 text-red-400 hover:bg-red-950/40 hover:text-red-300 font-mono text-xs transition-colors shrink-0"
+                          aria-label={`Désatteler l'attelage ${row.orderNumber}`}
+                        >
+                          <Unlink className="w-4 h-4" />
+                          <span className="font-medium">Désatteler</span>
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })
+            )}
           </div>
         </div>
       )}

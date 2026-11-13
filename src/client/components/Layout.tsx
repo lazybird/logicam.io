@@ -56,6 +56,7 @@ export const Layout: React.FC<LayoutProps> = ({
             type="button"
             className="lg:hidden text-on-surface-variant hover:text-primary p-1 shrink-0"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? 'Fermer le menu de navigation' : 'Ouvrir le menu de navigation'}
           >
             {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
@@ -141,6 +142,7 @@ export const Layout: React.FC<LayoutProps> = ({
             onClick={logout}
             className="p-1.5 rounded hover:bg-surface-variant text-on-surface-variant hover:text-red-400 transition-colors shrink-0"
             title="Se déconnecter"
+            aria-label="Se déconnecter de votre compte"
           >
             <LogOut className="w-5 h-5" />
           </button>

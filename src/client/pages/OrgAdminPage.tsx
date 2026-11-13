@@ -776,7 +776,7 @@ export const OrgAdminPage: React.FC = () => {
                     type="tel"
                     value={newGarPhone}
                     onChange={(e) => setNewGarPhone(e.target.value)}
-                    placeholder="Ex: +221 33 800 00 00"
+                    placeholder="Ex: 33 800 00 00"
                     className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none"
                   />
                 </div>
@@ -885,7 +885,7 @@ export const OrgAdminPage: React.FC = () => {
                   type="tel"
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
-                  placeholder="+221 77 000 00 00"
+                  placeholder="77 000 00 00"
                   required
                   className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none"
                 />

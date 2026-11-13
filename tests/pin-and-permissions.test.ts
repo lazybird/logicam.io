@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizePhone, hashPin, verifyPin } from '../src/server/auth/pin.js';
+import { normalizePhone, getPhoneVariants, hashPin, verifyPin } from '../src/server/auth/pin.js';
 import { hasCapability } from '../src/shared/permissions.js';
 
 describe('Auth PIN & Phone Normalization', () => {
@@ -7,6 +7,16 @@ describe('Auth PIN & Phone Normalization', () => {
     expect(normalizePhone('+221 77 123 45 67')).toBe('+221771234567');
     expect(normalizePhone('06 12 34 56 78')).toBe('0612345678');
     expect(normalizePhone('77-123-45-67')).toBe('771234567');
+  });
+
+  it('generates variants for national and international phone lookups', () => {
+    const variantsNational = getPhoneVariants('77 123 45 67');
+    expect(variantsNational).toContain('771234567');
+    expect(variantsNational).toContain('+221771234567');
+
+    const variantsIntl = getPhoneVariants('+221 77 123 45 67');
+    expect(variantsIntl).toContain('+221771234567');
+    expect(variantsIntl).toContain('771234567');
   });
 
   it('hashes and verifies 4-digit PIN codes', () => {

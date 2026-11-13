@@ -16,7 +16,7 @@ interface DemoAccount {
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
-  const [phone, setPhone] = useState('+221 77 123 45 67');
+  const [phone, setPhone] = useState('77 123 45 67');
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -127,7 +127,7 @@ export const LoginPage: React.FC = () => {
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="+221 77 123 45 67"
+                placeholder="77 123 45 67"
                 disabled={isSubmitting}
                 className="w-full bg-[#020617] border border-[#334155] rounded focus:outline-none pl-10 pr-3 py-2.5 font-mono text-sm text-on-surface placeholder:text-on-surface-variant/40 transition-colors"
               />

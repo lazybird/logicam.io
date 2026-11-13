@@ -415,7 +415,7 @@ export const SuperAdminOrgs: React.FC<SuperAdminOrgsProps> = ({ onManageOrg }) =
                     type="tel"
                     value={adminPhone}
                     onChange={(e) => setAdminPhone(e.target.value)}
-                    placeholder="Téléphone (ex: +221 77 000 11 22)"
+                    placeholder="Téléphone (ex: 77 000 11 22)"
                     className="bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none"
                   />
                   <input
