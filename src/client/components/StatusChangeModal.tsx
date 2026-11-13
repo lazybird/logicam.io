@@ -407,7 +407,7 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
                   options={garages.map((g) => ({
                     id: g.id,
                     label: g.name,
-                    subLabel: g.phone || g.city || undefined,
+                    subLabel: g.contactPhone || g.location || undefined,
                   }))}
                   value={selectedGarageId}
                   onChange={(val) => setSelectedGarageId(val)}

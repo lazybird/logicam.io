@@ -103,17 +103,6 @@ export const OrgAdminPage: React.FC = () => {
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamDesc, setNewTeamDesc] = useState('');
 
-  // Gestion de la touche Échap pour fermer les modales
-  useEscapeKey(isAddMemberOpen, () => setIsAddMemberOpen(false));
-  useEscapeKey(isAddTeamOpen, () => setIsAddTeamOpen(false));
-  useEscapeKey(Boolean(deleteConfirmation), () => setDeleteConfirmation(null));
-  useEscapeKey(Boolean(resetPinMember), () => setResetPinMember(null));
-
-  // Ajout Catégorie
-  const [newCatName, setNewCatName] = useState('');
-  const [newCatCode, setNewCatCode] = useState('');
-  const [newCatSeverity, setNewCatSeverity] = useState('medium');
-
   // Modale de confirmation de suppression
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     type: 'category' | 'garage';
@@ -126,6 +115,17 @@ export const OrgAdminPage: React.FC = () => {
   const [resetPinMember, setResetPinMember] = useState<MemberItem | null>(null);
   const [newMemberPin, setNewMemberPin] = useState('1234');
   const [resettingPin, setResettingPin] = useState(false);
+
+  // Gestion de la touche Échap pour fermer les modales
+  useEscapeKey(isAddMemberOpen, () => setIsAddMemberOpen(false));
+  useEscapeKey(isAddTeamOpen, () => setIsAddTeamOpen(false));
+  useEscapeKey(Boolean(deleteConfirmation), () => setDeleteConfirmation(null));
+  useEscapeKey(Boolean(resetPinMember), () => setResetPinMember(null));
+
+  // Ajout Catégorie
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatCode, setNewCatCode] = useState('');
+  const [newCatSeverity, setNewCatSeverity] = useState('medium');
 
   // Ajout Garage
   const [newGarName, setNewGarName] = useState('');
