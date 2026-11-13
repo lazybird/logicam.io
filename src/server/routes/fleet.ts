@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { eq, and, sql, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tractors, trailers, couplings } from '../db/schema.js';
+import { tractors, trailers, couplings, breakdownCategories } from '../db/schema.js';
 import { parseTrucksExcelFile } from '../services/excelImporter.js';
 import {
   authMiddleware,
@@ -15,6 +15,7 @@ import type {
   TrailerDTO,
   VehicleStatus,
   TrailerType,
+  BreakdownCategoryDTO,
 } from '../../shared/types.js';
 
 export const fleetRouter = new Hono<{ Variables: AuthContextVariables }>();
@@ -43,6 +44,11 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
     .select()
     .from(trailers)
     .where(eq(trailers.organizationId, effectiveOrgId));
+
+  const allBreakdownCategories = await db
+    .select()
+    .from(breakdownCategories)
+    .where(eq(breakdownCategories.organizationId, effectiveOrgId));
 
   // 2. Chargement des attelages
   const couplingsQuery = db
@@ -175,11 +181,20 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
     oilChangesDueCount,
   };
 
+  const breakdownCategoriesDTO: BreakdownCategoryDTO[] = allBreakdownCategories.map((c) => ({
+    id: c.id,
+    organizationId: c.organizationId,
+    name: c.name,
+    code: c.code,
+    severity: c.severity,
+  }));
+
   return c.json({
     kpis,
     couplings: couplingsDTO,
     tractors: tractorsDTO,
     trailers: trailersDTO,
+    breakdownCategories: breakdownCategoriesDTO,
   });
 });
 

@@ -22,6 +22,7 @@ import { api } from '../lib/api';
 import { useAuth, useTeamPolicy } from '../context/AuthContext';
 import { CouplingModal } from '../components/CouplingModal';
 import { UncoupleModal } from '../components/UncoupleModal';
+import { BreakdownModal } from '../components/BreakdownModal';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import type {
   CouplingRowDTO,
@@ -30,6 +31,7 @@ import type {
   TrailerDTO,
   TrailerType,
   VehicleStatus,
+  BreakdownCategoryDTO,
 } from '../../shared/types';
 
 interface FleetApiResponse {
@@ -41,6 +43,7 @@ interface FleetApiResponse {
   })[];
   tractors: TractorDTO[];
   trailers: TrailerDTO[];
+  breakdownCategories?: BreakdownCategoryDTO[];
 }
 
 export const FleetDashboard: React.FC = () => {
@@ -76,6 +79,18 @@ export const FleetDashboard: React.FC = () => {
 
   // Modale de désattelage
   const [uncoupleTarget, setUncoupleTarget] = useState<{ id: string; label: string } | null>(null);
+
+  // Modale de déclaration de panne
+  const [breakdownTarget, setBreakdownTarget] = useState<{
+    id: string;
+    orderNumber: string;
+    tractorId: string;
+    tractorPlate: string;
+    tractorStatus: VehicleStatus;
+    trailerId: string;
+    trailerPlate: string;
+    trailerStatus: VehicleStatus;
+  } | null>(null);
 
   // Modale d'ajout rapide de véhicule
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
@@ -174,10 +189,32 @@ export const FleetDashboard: React.FC = () => {
     setUncoupleTarget({ id: couplingId, label });
   };
 
-  // Changement rapide de statut d'un tracteur
-  const handleUpdateTractorStatus = async (tractorId: string, newStatus: VehicleStatus) => {
+  // Changement rapide de statut d'un attelage (ou déclenchement de la modale de panne)
+  const handleStatusChangeRequest = async (
+    row: (typeof filteredCouplings)[number],
+    newStatus: VehicleStatus
+  ) => {
+    if (newStatus === 'breakdown') {
+      // Ouvre la modale complète pour choisir tracteur / remorque / les deux et la catégorie
+      setBreakdownTarget({
+        id: row.id,
+        orderNumber: row.orderNumber,
+        tractorId: row.tractorId,
+        tractorPlate: row.tractorPlate,
+        tractorStatus: row.tractorStatus,
+        trailerId: row.trailerId,
+        trailerPlate: row.trailerPlate,
+        trailerStatus: row.trailerStatus,
+      });
+      return;
+    }
+
     try {
-      await api.patch(`/api/fleet/tractors/${tractorId}`, { status: newStatus });
+      // Remise en service ou passage en maintenance : s'applique aux deux composants de l'attelage
+      await Promise.all([
+        api.patch(`/api/fleet/tractors/${row.tractorId}`, { status: newStatus }),
+        api.patch(`/api/fleet/trailers/${row.trailerId}`, { status: newStatus }),
+      ]);
       loadFleet();
     } catch (err: any) {
       alert(err?.message || 'Erreur lors de la mise à jour du statut');
@@ -573,7 +610,14 @@ export const FleetDashboard: React.FC = () => {
 
                           {/* Tracteur */}
                           <td className="py-2.5 px-3">
-                            <div className="font-semibold text-on-surface">{row.tractorPlate}</div>
+                            <div className="flex items-center gap-1.5 font-semibold text-on-surface">
+                              <span>{row.tractorPlate}</span>
+                              {row.tractorStatus === 'breakdown' && (
+                                <span className="px-1 py-0.2 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px] font-normal" title="Tracteur en panne">
+                                  Panne
+                                </span>
+                              )}
+                            </div>
                             {row.tractorBrandModel && (
                               <div className="text-[10px] text-on-surface-variant font-sans truncate max-w-[110px] sm:max-w-none">
                                 {row.tractorBrandModel}
@@ -583,7 +627,14 @@ export const FleetDashboard: React.FC = () => {
 
                           {/* Remorque */}
                           <td className="py-2.5 px-3">
-                            <div className="font-semibold text-on-surface">{row.trailerPlate}</div>
+                            <div className="flex items-center gap-1.5 font-semibold text-on-surface">
+                              <span>{row.trailerPlate}</span>
+                              {row.trailerStatus === 'breakdown' && (
+                                <span className="px-1 py-0.2 rounded bg-red-950/60 text-red-400 border border-red-500/40 text-[9px] font-normal" title="Remorque en panne">
+                                  Panne
+                                </span>
+                              )}
+                            </div>
                             {row.driverName ? (
                               <div className="text-[10px] text-on-surface-variant font-sans truncate max-w-[110px] sm:max-w-none">
                                 {row.driverName}
@@ -641,10 +692,16 @@ export const FleetDashboard: React.FC = () => {
                             <div className="hidden md:flex items-center justify-center gap-1.5">
                               {can('fleet:manage') && (
                                 <select
-                                  value={row.tractorStatus}
+                                  value={
+                                    row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown'
+                                      ? 'breakdown'
+                                      : row.tractorStatus === 'maintenance' || row.trailerStatus === 'maintenance'
+                                      ? 'maintenance'
+                                      : 'in_service'
+                                  }
                                   onChange={(e) =>
-                                    handleUpdateTractorStatus(
-                                      row.tractorId,
+                                    handleStatusChangeRequest(
+                                      row,
                                       e.target.value as VehicleStatus
                                     )
                                   }
@@ -741,10 +798,16 @@ export const FleetDashboard: React.FC = () => {
                                       </label>
                                       <select
                                         id={`acc-status-${row.id}`}
-                                        value={row.tractorStatus}
+                                        value={
+                                          row.tractorStatus === 'breakdown' || row.trailerStatus === 'breakdown'
+                                            ? 'breakdown'
+                                            : row.tractorStatus === 'maintenance' || row.trailerStatus === 'maintenance'
+                                            ? 'maintenance'
+                                            : 'in_service'
+                                        }
                                         onChange={(e) =>
-                                          handleUpdateTractorStatus(
-                                            row.tractorId,
+                                          handleStatusChangeRequest(
+                                            row,
                                             e.target.value as VehicleStatus
                                           )
                                         }
@@ -886,6 +949,17 @@ export const FleetDashboard: React.FC = () => {
           onClose={() => setUncoupleTarget(null)}
           couplingId={uncoupleTarget.id}
           couplingLabel={uncoupleTarget.label}
+          onSuccess={loadFleet}
+        />
+      )}
+
+      {/* Modale de Déclaration de Panne */}
+      {breakdownTarget && (
+        <BreakdownModal
+          isOpen={!!breakdownTarget}
+          onClose={() => setBreakdownTarget(null)}
+          coupling={breakdownTarget}
+          categories={data?.breakdownCategories || []}
           onSuccess={loadFleet}
         />
       )}
