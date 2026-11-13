@@ -13,6 +13,7 @@ import {
   couplings,
   breakdownCategories,
   garages,
+  drivers,
 } from './schema.js';
 import { hashPin, normalizePhone } from '../auth/pin.js';
 import type { VehicleStatus, TrailerType } from '../../shared/types.js';
@@ -266,14 +267,26 @@ export async function ensureSeedData(): Promise<void> {
         })
         .returning();
 
-      // 3. Attelage actif
+      // 3. Chauffeur
+      const driverFullName = `Conducteur Test ${fleetConfig.prefix}-${String(i).padStart(2, '0')}`;
+      const [insertedDriver] = await db
+        .insert(drivers)
+        .values({
+          organizationId: fleetConfig.org.id,
+          fullName: driverFullName,
+          status: 'active',
+        })
+        .returning();
+
+      // 4. Attelage actif
       await db.insert(couplings).values({
         organizationId: fleetConfig.org.id,
         orderNumber: `#ORD-LOCAL-${String(orderIndex).padStart(4, '0')}`,
         tractorId: insertedTractor.id,
         trailerId: insertedTrailer.id,
         isActive: true,
-        driverName: `Conducteur Test ${fleetConfig.prefix}-${String(i).padStart(2, '0')}`,
+        driverId: insertedDriver.id,
+        driverName: driverFullName,
       });
 
       orderIndex++;

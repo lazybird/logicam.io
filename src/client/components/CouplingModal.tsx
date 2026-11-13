@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Link2, Truck, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
-import type { TractorDTO, TrailerDTO } from '../../shared/types';
+import type { TractorDTO, TrailerDTO, DriverDTO } from '../../shared/types';
 import { SearchableSelect, type SearchableSelectOption } from './SearchableSelect';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 
@@ -10,6 +10,7 @@ interface CouplingModalProps {
   onClose: () => void;
   tractors: TractorDTO[];
   trailers: TrailerDTO[];
+  drivers?: DriverDTO[];
   onSuccess: () => void;
   initialTractorId?: string;
   initialTrailerId?: string;
@@ -20,13 +21,14 @@ export const CouplingModal: React.FC<CouplingModalProps> = ({
   onClose,
   tractors,
   trailers,
+  drivers = [],
   onSuccess,
   initialTractorId,
   initialTrailerId,
 }) => {
   const [selectedTractorId, setSelectedTractorId] = useState(initialTractorId || '');
   const [selectedTrailerId, setSelectedTrailerId] = useState(initialTrailerId || '');
-  const [driverName, setDriverName] = useState('');
+  const [selectedDriverId, setSelectedDriverId] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +37,13 @@ export const CouplingModal: React.FC<CouplingModalProps> = ({
   useEscapeKey(isOpen, onClose);
 
   if (!isOpen) return null;
+
+  const [driverList, setDriverList] = useState<DriverDTO[]>(drivers);
+
+  // Synchronisation des chauffeurs
+  React.useEffect(() => {
+    setDriverList(drivers);
+  }, [drivers]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,10 +56,12 @@ export const CouplingModal: React.FC<CouplingModalProps> = ({
     setError(null);
 
     try {
+      const selectedDriver = driverList.find((d) => d.id === selectedDriverId);
       await api.post('/api/fleet/couple', {
         tractorId: selectedTractorId,
         trailerId: selectedTrailerId,
-        driverName: driverName.trim() || undefined,
+        driverId: selectedDriver?.id || undefined,
+        driverName: selectedDriver ? selectedDriver.fullName : undefined,
         orderNumber: orderNumber.trim() || undefined,
       });
 
@@ -65,6 +76,7 @@ export const CouplingModal: React.FC<CouplingModalProps> = ({
 
   const selectedTractor = tractors.find((t) => t.id === selectedTractorId);
   const selectedTrailer = trailers.find((tr) => tr.id === selectedTrailerId);
+  const selectedDriver = driverList.find((d) => d.id === selectedDriverId);
 
   // Préparation des options pour SearchableSelect
   const tractorOptions: SearchableSelectOption[] = tractors.map((t) => ({
@@ -82,6 +94,23 @@ export const CouplingModal: React.FC<CouplingModalProps> = ({
     badgeColor: tr.isCoupled ? 'amber' : 'emerald',
     subLabel: `Type: ${tr.trailerType}`,
   }));
+
+  const driverOptions: SearchableSelectOption[] = driverList.map((d) => ({
+    id: d.id,
+    label: d.fullName,
+    badge: d.isAssigned ? 'En mission' : 'DISPO',
+    badgeColor: d.isAssigned ? 'amber' : 'emerald',
+    subLabel: d.phone ? `Tél: ${d.phone}` : undefined,
+  }));
+
+  const handleCreateDriver = async (name: string): Promise<string> => {
+    const res = await api.post<DriverDTO>('/api/fleet/drivers', { fullName: name });
+    setDriverList((prev) => {
+      if (prev.some((d) => d.id === res.id)) return prev;
+      return [...prev, res];
+    });
+    return res.id;
+  };
 
   return (
     <div
@@ -153,19 +182,25 @@ export const CouplingModal: React.FC<CouplingModalProps> = ({
             }
           />
 
-          {/* Nom du Chauffeur */}
-          <div className="flex flex-col gap-1.5">
-            <label className="font-mono text-xs uppercase tracking-wider text-on-surface">
-              Nom du Chauffeur (optionnel)
-            </label>
-            <input
-              type="text"
-              value={driverName}
-              onChange={(e) => setDriverName(e.target.value)}
-              placeholder="Ex: Amadou Ba"
-              className="bg-[#020617] border border-[#334155] rounded text-on-surface font-sans text-xs py-2.5 px-3 focus:outline-none focus:border-[#ff8c00]"
-            />
-          </div>
+          {/* Chauffeur avec Recherche et Création Directe */}
+          <SearchableSelect
+            label="Chauffeur assigné (optionnel)"
+            options={driverOptions}
+            value={selectedDriverId}
+            onChange={(val) => setSelectedDriverId(val)}
+            placeholder="Sélectionner ou saisir un chauffeur..."
+            emptyMessage="Aucun chauffeur trouvé. Vous pouvez l'ajouter ci-dessus."
+            allowCreate
+            createLabel="Ajouter nouveau chauffeur"
+            onCreateNew={handleCreateDriver}
+            warningNotice={
+              selectedDriver?.isAssigned ? (
+                <span className="text-amber-400 font-sans text-[11px] normal-case">
+                  ⚠️ Déjà en mission (sera réaffecté)
+                </span>
+              ) : undefined
+            }
+          />
 
           {/* N° d'ordre personnalisé */}
           <div className="flex flex-col gap-1.5">

@@ -9,6 +9,7 @@ import {
   garages,
   incidents,
   users,
+  drivers,
 } from '../db/schema.js';
 import { parseTrucksExcelFile } from '../services/excelImporter.js';
 import {
@@ -26,6 +27,7 @@ import type {
   BreakdownCategoryDTO,
   GarageDTO,
   IncidentDTO,
+  DriverDTO,
 } from '../../shared/types.js';
 
 export const fleetRouter = new Hono<{ Variables: AuthContextVariables }>();
@@ -65,6 +67,11 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
     .from(garages)
     .where(eq(garages.organizationId, effectiveOrgId));
 
+  const allDrivers = await db
+    .select()
+    .from(drivers)
+    .where(eq(drivers.organizationId, effectiveOrgId));
+
   // 2. Chargement des attelages
   const couplingsQuery = db
     .select({
@@ -73,6 +80,7 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
       orderNumber: couplings.orderNumber,
       tractorId: couplings.tractorId,
       trailerId: couplings.trailerId,
+      driverId: couplings.driverId,
       driverName: couplings.driverName,
       isActive: couplings.isActive,
       coupledAt: couplings.coupledAt,
@@ -101,6 +109,8 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
   // Ensembles des tracteurs et remorques actuellement couplés
   const activeCoupledTractorIds = new Set<string>();
   const activeCoupledTrailerIds = new Set<string>();
+  const activeDriverCouplingMap = new Map<string, string>(); // driverId -> couplingId
+  const activeDriverNameCouplingMap = new Map<string, string>(); // driverName.toLowerCase() -> couplingId
 
   const couplingsDTO: (CouplingRowDTO & {
     tractorBrandModel?: string | null;
@@ -112,6 +122,12 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
     if (row.isActive) {
       activeCoupledTractorIds.add(row.tractorId);
       activeCoupledTrailerIds.add(row.trailerId);
+      if (row.driverId) {
+        activeDriverCouplingMap.set(row.driverId, row.id);
+      }
+      if (row.driverName) {
+        activeDriverNameCouplingMap.set(row.driverName.trim().toLowerCase(), row.id);
+      }
     }
 
     couplingsDTO.push({
@@ -125,6 +141,7 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
       trailerType: row.trailerType || 'BENNE',
       tractorStatus: (row.tractorStatus as VehicleStatus) || 'in_service',
       trailerStatus: (row.trailerStatus as VehicleStatus) || 'in_service',
+      driverId: row.driverId,
       driverName: row.driverName,
       isActive: row.isActive,
       coupledAt: row.coupledAt.toISOString(),
@@ -214,6 +231,24 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
     contactPhone: g.contactPhone,
   }));
 
+  const driversDTO: DriverDTO[] = allDrivers.map((d) => {
+    const currentCouplingId =
+      activeDriverCouplingMap.get(d.id) ||
+      activeDriverNameCouplingMap.get(d.fullName.trim().toLowerCase()) ||
+      null;
+    return {
+      id: d.id,
+      organizationId: d.organizationId,
+      fullName: d.fullName,
+      phone: d.phone,
+      licenseNumber: d.licenseNumber,
+      status: d.status as 'active' | 'inactive',
+      isAssigned: Boolean(currentCouplingId),
+      currentCouplingId,
+      createdAt: d.createdAt.toISOString(),
+    };
+  });
+
   // 3. Chargement des incidents actifs / récents
   const recentIncidentsRaw = await db
     .select({
@@ -298,6 +333,7 @@ fleetRouter.get('/', requireCapability('fleet:read'), async (c) => {
     trailers: trailersDTO,
     breakdownCategories: breakdownCategoriesDTO,
     garages: garagesDTO,
+    drivers: driversDTO,
     incidents: incidentsDTO,
   });
 });
@@ -517,7 +553,7 @@ fleetRouter.post('/couple', requireCapability('couplings:change'), async (c) => 
     return c.json({ error: 'Tracteur et Remorque obligatoires' }, 400);
   }
 
-  const { tractorId, trailerId, driverName, orderNumber } = body;
+  const { tractorId, trailerId, driverId, driverName, orderNumber } = body;
 
   // Vérifier l'appartenance à l'organisation
   const [trac] = await db
@@ -536,9 +572,69 @@ fleetRouter.post('/couple', requireCapability('couplings:change'), async (c) => 
     return c.json({ error: 'Tracteur ou remorque introuvable dans votre flotte' }, 404);
   }
 
+  // Résoudre ou créer le chauffeur si nécessaire
+  let resolvedDriverId: string | null = null;
+  let resolvedDriverName: string | null = null;
+
+  if (driverId) {
+    const [existingDriver] = await db
+      .select()
+      .from(drivers)
+      .where(and(eq(drivers.id, driverId), eq(drivers.organizationId, effectiveOrgId)))
+      .limit(1);
+    if (existingDriver) {
+      resolvedDriverId = existingDriver.id;
+      resolvedDriverName = existingDriver.fullName;
+    }
+  }
+
+  if (!resolvedDriverId && driverName && String(driverName).trim()) {
+    const cleanName = String(driverName).trim();
+    resolvedDriverName = cleanName;
+    // Vérifier si un chauffeur de ce nom existe déjà
+    const [existingDriverByName] = await db
+      .select()
+      .from(drivers)
+      .where(
+        and(
+          eq(drivers.organizationId, effectiveOrgId),
+          sql`LOWER(${drivers.fullName}) = LOWER(${cleanName})`
+        )
+      )
+      .limit(1);
+
+    if (existingDriverByName) {
+      resolvedDriverId = existingDriverByName.id;
+    } else {
+      // Création automatique et fluide du chauffeur dans le référentiel
+      const [newDriver] = await db
+        .insert(drivers)
+        .values({
+          organizationId: effectiveOrgId,
+          fullName: cleanName,
+          status: 'active',
+        })
+        .returning();
+      resolvedDriverId = newDriver.id;
+    }
+  }
+
   const now = new Date();
 
-  // Désatteler les attelages actifs précédents
+  // Désatteler les attelages actifs précédents (tracteur, remorque ou chauffeur si spécifié)
+  const uncoupleConditions = [
+    eq(couplings.tractorId, tractorId),
+    eq(couplings.trailerId, trailerId),
+  ];
+  if (resolvedDriverId) {
+    uncoupleConditions.push(eq(couplings.driverId, resolvedDriverId));
+  }
+  if (resolvedDriverName) {
+    uncoupleConditions.push(
+      sql`LOWER(${couplings.driverName}) = LOWER(${resolvedDriverName})`
+    );
+  }
+
   await db
     .update(couplings)
     .set({ isActive: false, uncoupledAt: now })
@@ -546,7 +642,7 @@ fleetRouter.post('/couple', requireCapability('couplings:change'), async (c) => 
       and(
         eq(couplings.organizationId, effectiveOrgId),
         eq(couplings.isActive, true),
-        or(eq(couplings.tractorId, tractorId), eq(couplings.trailerId, trailerId))
+        or(...uncoupleConditions)
       )
     );
 
@@ -561,7 +657,8 @@ fleetRouter.post('/couple', requireCapability('couplings:change'), async (c) => 
       orderNumber: ordNum,
       tractorId,
       trailerId,
-      driverName: driverName ? String(driverName).trim() : null,
+      driverId: resolvedDriverId,
+      driverName: resolvedDriverName,
       isActive: true,
       coupledAt: now,
       createdById: user.id,
@@ -579,6 +676,7 @@ fleetRouter.post('/couple', requireCapability('couplings:change'), async (c) => 
     trailerType: trail.trailerType,
     tractorStatus: trac.status as VehicleStatus,
     trailerStatus: trail.status as VehicleStatus,
+    driverId: newCoupling.driverId,
     driverName: newCoupling.driverName,
     isActive: true,
     coupledAt: newCoupling.coupledAt.toISOString(),
@@ -838,3 +936,96 @@ fleetRouter.post('/import', requireCapability('fleet:import'), async (c) => {
     importedCount,
   });
 });
+
+/**
+ * Liste des chauffeurs de l'organisation
+ */
+fleetRouter.get('/drivers', requireCapability('fleet:read'), async (c) => {
+  const effectiveOrgId = c.get('effectiveOrgId');
+  if (!effectiveOrgId) {
+    return c.json({ error: 'Aucune organisation sélectionnée' }, 400);
+  }
+
+  const list = await db
+    .select()
+    .from(drivers)
+    .where(eq(drivers.organizationId, effectiveOrgId))
+    .orderBy(drivers.fullName);
+
+  return c.json(
+    list.map((d) => ({
+      id: d.id,
+      organizationId: d.organizationId,
+      fullName: d.fullName,
+      phone: d.phone,
+      licenseNumber: d.licenseNumber,
+      status: d.status,
+      createdAt: d.createdAt.toISOString(),
+    }))
+  );
+});
+
+/**
+ * Création d'un chauffeur
+ */
+fleetRouter.post('/drivers', requireCapability('couplings:change'), async (c) => {
+  const effectiveOrgId = c.get('effectiveOrgId');
+  const body = await c.req.json().catch(() => null);
+
+  if (!body || !body.fullName || !String(body.fullName).trim()) {
+    return c.json({ error: 'Nom complet du chauffeur obligatoire' }, 400);
+  }
+
+  const fullName = String(body.fullName).trim();
+  const phone = body.phone ? String(body.phone).trim() : null;
+  const licenseNumber = body.licenseNumber ? String(body.licenseNumber).trim() : null;
+
+  // Vérifier doublon
+  const [existing] = await db
+    .select()
+    .from(drivers)
+    .where(
+      and(
+        eq(drivers.organizationId, effectiveOrgId),
+        sql`LOWER(${drivers.fullName}) = LOWER(${fullName})`
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    return c.json({
+      id: existing.id,
+      organizationId: existing.organizationId,
+      fullName: existing.fullName,
+      phone: existing.phone,
+      licenseNumber: existing.licenseNumber,
+      status: existing.status,
+      createdAt: existing.createdAt.toISOString(),
+    });
+  }
+
+  const [newDriver] = await db
+    .insert(drivers)
+    .values({
+      organizationId: effectiveOrgId,
+      fullName,
+      phone,
+      licenseNumber,
+      status: 'active',
+    })
+    .returning();
+
+  return c.json(
+    {
+      id: newDriver.id,
+      organizationId: newDriver.organizationId,
+      fullName: newDriver.fullName,
+      phone: newDriver.phone,
+      licenseNumber: newDriver.licenseNumber,
+      status: newDriver.status,
+      createdAt: newDriver.createdAt.toISOString(),
+    },
+    201
+  );
+});
+

@@ -35,6 +35,11 @@ describe('Hono API Routes & Multi-Tenant Security', () => {
     expect(res.status).toBe(401);
   });
 
+  it('GET /api/fleet/drivers rejects unauthenticated requests with 401', async () => {
+    const res = await app.request('/api/fleet/drivers');
+    expect(res.status).toBe(401);
+  });
+
   it('GET /api/organizations rejects unauthenticated requests with 401', async () => {
     const res = await app.request('/api/organizations');
     expect(res.status).toBe(401);

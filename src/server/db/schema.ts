@@ -29,6 +29,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   breakdownCategories: many(breakdownCategories),
   garages: many(garages),
   incidents: many(incidents),
+  drivers: many(drivers),
 }));
 
 // -------------------------------------------------------------
@@ -240,6 +241,7 @@ export const couplings = pgTable('couplings', {
   trailerId: uuid('trailer_id')
     .notNull()
     .references(() => trailers.id, { onDelete: 'cascade' }),
+  driverId: uuid('driver_id').references(() => drivers.id, { onDelete: 'set null' }),
   driverName: text('driver_name'),
   isActive: boolean('is_active').notNull().default(true),
   coupledAt: timestamp('coupled_at', { withTimezone: true }).defaultNow().notNull(),
@@ -259,6 +261,10 @@ export const couplingsRelations = relations(couplings, ({ one }) => ({
   trailer: one(trailers, {
     fields: [couplings.trailerId],
     references: [trailers.id],
+  }),
+  driver: one(drivers, {
+    fields: [couplings.driverId],
+    references: [drivers.id],
   }),
   createdBy: one(users, {
     fields: [couplings.createdById],
@@ -360,3 +366,33 @@ export const garagesRelations = relations(garages, ({ one }) => ({
     references: [organizations.id],
   }),
 }));
+
+// -------------------------------------------------------------
+// CHAUFFEURS (DRIVERS)
+// -------------------------------------------------------------
+export const drivers = pgTable(
+  'drivers',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    fullName: text('full_name').notNull(),
+    phone: text('phone'),
+    licenseNumber: text('license_number'),
+    status: text('status').notNull().default('active'), // 'active' | 'inactive'
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('drivers_org_fullname_unique_idx').on(table.organizationId, table.fullName),
+  ]
+);
+
+export const driversRelations = relations(drivers, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [drivers.organizationId],
+    references: [organizations.id],
+  }),
+  couplings: many(couplings),
+}));
+
