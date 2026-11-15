@@ -56,6 +56,14 @@ interface FleetApiResponse {
   drivers?: DriverDTO[];
 }
 
+const TRAILER_TYPE_OPTIONS: SearchableSelectOption[] = [
+  { id: 'BENNE', label: 'BENNE' },
+  { id: 'PLATEAU', label: 'PLATEAU' },
+  { id: 'CITERNE', label: 'CITERNE' },
+  { id: 'FRIGO', label: 'FRIGO' },
+  { id: 'AUTRE', label: 'AUTRE' },
+];
+
 export const FleetDashboard: React.FC = () => {
   const { currentOrg } = useAuth();
   const { can } = useTeamPolicy();
@@ -2103,22 +2111,15 @@ export const FleetDashboard: React.FC = () => {
                         className="bg-surface border border-[#334155] rounded py-1.5 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
                       />
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="uppercase text-on-surface text-[10px]">
-                        Type de Remorque
-                      </label>
-                      <select
-                        value={newTrailerType}
-                        onChange={(e) => setNewTrailerType(e.target.value as TrailerType)}
-                        className="bg-surface border border-[#334155] rounded py-1.5 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
-                      >
-                        <option value="BENNE">BENNE</option>
-                        <option value="PLATEAU">PLATEAU</option>
-                        <option value="CITERNE">CITERNE</option>
-                        <option value="FRIGO">FRIGO</option>
-                        <option value="AUTRE">AUTRE</option>
-                      </select>
-                    </div>
+                    {/* Type de Remorque harmonisé */}
+                    <SearchableSelect
+                      label="Type de Remorque"
+                      options={TRAILER_TYPE_OPTIONS}
+                      value={newTrailerType}
+                      onChange={(val) => setNewTrailerType(val as TrailerType)}
+                      placeholder="Sélectionner le type..."
+                      required
+                    />
                   </div>
 
                   {/* Chauffeur (optionnel) avec recherche et ajout à la volée */}
@@ -2182,20 +2183,14 @@ export const FleetDashboard: React.FC = () => {
                       />
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-1.5">
-                      <label className="uppercase text-on-surface">Type de Remorque</label>
-                      <select
-                        value={newTrailerType}
-                        onChange={(e) => setNewTrailerType(e.target.value as TrailerType)}
-                        className="bg-[#020617] border border-[#334155] rounded py-2 px-3 text-on-surface focus:outline-none focus:border-[#ff8c00]"
-                      >
-                        <option value="BENNE">BENNE</option>
-                        <option value="PLATEAU">PLATEAU</option>
-                        <option value="CITERNE">CITERNE</option>
-                        <option value="FRIGO">FRIGO</option>
-                        <option value="AUTRE">AUTRE</option>
-                      </select>
-                    </div>
+                    <SearchableSelect
+                      label="Type de Remorque"
+                      options={TRAILER_TYPE_OPTIONS}
+                      value={newTrailerType}
+                      onChange={(val) => setNewTrailerType(val as TrailerType)}
+                      placeholder="Sélectionner le type..."
+                      required
+                    />
                   )}
                 </>
               )}

@@ -12,6 +12,7 @@ import {
   Lock,
   CheckCircle2,
   Save,
+  ChevronDown,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth, useTeamPolicy } from '../context/AuthContext';
@@ -649,16 +650,19 @@ export const OrgAdminPage: React.FC = () => {
 
             {/* Vue par défaut */}
             <div className="flex items-center gap-4 bg-surface-container p-3 rounded border border-[#334155] font-mono text-xs">
-              <span className="text-on-surface-variant">Vue d'accueil par défaut :</span>
-              <select
-                value={editingDefaultView}
-                onChange={(e) => setEditingDefaultView(e.target.value)}
-                className="bg-[#020617] border border-[#334155] rounded py-1 px-3 text-on-surface focus:outline-none"
-              >
-                <option value="dashboard">Tableau de bord</option>
-                <option value="fleet">État du Parc</option>
-                <option value="incidents">Incidents & Réparations</option>
-              </select>
+              <span className="text-on-surface-variant shrink-0">Vue d'accueil par défaut :</span>
+              <div className="relative">
+                <select
+                  value={editingDefaultView}
+                  onChange={(e) => setEditingDefaultView(e.target.value)}
+                  className="bg-[#020617] border border-[#334155] rounded py-1 pl-3 pr-8 text-on-surface focus:outline-none focus:border-[#ff8c00] transition-colors appearance-none cursor-pointer"
+                >
+                  <option value="dashboard">Tableau de bord</option>
+                  <option value="fleet">État du Parc</option>
+                  <option value="incidents">Incidents & Réparations</option>
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant" />
+              </div>
             </div>
 
             {/* Grille des Capabilities */}
@@ -768,16 +772,19 @@ export const OrgAdminPage: React.FC = () => {
 
                 <div>
                   <label className="text-on-surface-variant block mb-1">Priorité / Sévérité</label>
-                  <select
-                    value={newCatSeverity}
-                    onChange={(e) => setNewCatSeverity(e.target.value)}
-                    className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none"
-                  >
-                    <option value="low">Faible (Organe non critique)</option>
-                    <option value="medium">Moyenne (Standard)</option>
-                    <option value="high">Élevée (Important)</option>
-                    <option value="critical">Critique (Immobilisation immédiate)</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={newCatSeverity}
+                      onChange={(e) => setNewCatSeverity(e.target.value)}
+                      className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 pl-2.5 pr-8 text-on-surface focus:outline-none focus:border-[#ff8c00] transition-colors appearance-none cursor-pointer"
+                    >
+                      <option value="low">Faible (Organe non critique)</option>
+                      <option value="medium">Moyenne (Standard)</option>
+                      <option value="high">Élevée (Important)</option>
+                      <option value="critical">Critique (Immobilisation immédiate)</option>
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant" />
+                  </div>
                 </div>
 
                 <div>
@@ -1087,30 +1094,36 @@ export const OrgAdminPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-on-surface-variant block mb-1">Rôle</label>
-                  <select
-                    value={newRole}
-                    onChange={(e) => setNewRole(e.target.value as UserRole)}
-                    className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none"
-                  >
-                    <option value="MEMBER">Membre</option>
-                    <option value="ORG_ADMIN">Admin Organisation</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={newRole}
+                      onChange={(e) => setNewRole(e.target.value as UserRole)}
+                      className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 pl-2.5 pr-8 text-on-surface focus:outline-none focus:border-[#ff8c00] transition-colors appearance-none cursor-pointer"
+                    >
+                      <option value="MEMBER">Membre</option>
+                      <option value="ORG_ADMIN">Admin Organisation</option>
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant" />
+                  </div>
                 </div>
 
                 <div>
                   <label className="text-on-surface-variant block mb-1">Équipe</label>
-                  <select
-                    value={newTeamId}
-                    onChange={(e) => setNewTeamId(e.target.value)}
-                    className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 px-2.5 text-on-surface focus:outline-none"
-                  >
-                    <option value="">Aucune</option>
-                    {(data?.teams || []).map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={newTeamId}
+                      onChange={(e) => setNewTeamId(e.target.value)}
+                      className="w-full bg-[#020617] border border-[#334155] rounded py-1.5 pl-2.5 pr-8 text-on-surface focus:outline-none focus:border-[#ff8c00] transition-colors appearance-none cursor-pointer"
+                    >
+                      <option value="">Aucune</option>
+                      {(data?.teams || []).map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant" />
+                  </div>
                 </div>
               </div>
 
